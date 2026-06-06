@@ -129,7 +129,9 @@ type IconLoaderResource = {
 2. `pixels` 保存 `[x, y, paletteIndex, alphaByte]`。
 3. 透明背景不会进入输出。
 4. 基准分辨率固定为 `64 * 64`。
-5. 渲染器按容器尺寸计算像素块大小。
+5. 运行时展示分辨率配置为 `32 * 32`。
+6. 渲染前先将基准点阵转换为展示点阵，同一展示格使用 alpha 加权平均色和最大 alpha 聚合。
+7. 渲染器按容器尺寸计算像素块大小。
 
 ## 6. Manifest 约束
 
@@ -165,10 +167,11 @@ Icon Loader 资源条目：
 1. `generateIconLoaderScenario(seed, registry)` 从资源池读取全部可用 icon。
 2. 对资源池做不放回抽取，形成一轮播放事件。
 3. 渲染器按时间确定当前事件。
-4. 每轮使用 `createIconLoaderRound` 派生 round seed。
-5. 每个 icon 使用 `orderIconLoaderPoints` 选择填充顺序。
-6. 已显示像素数随当前动画周期递增。
-7. 一轮播放完后重新洗牌。
+4. 渲染器加载 `64 * 64` 资源后转换为 `32 * 32` 展示点阵。
+5. 每轮使用 `createIconLoaderRound` 派生 round seed。
+6. 每个 icon 使用 `orderIconLoaderPoints` 选择填充顺序。
+7. 已显示像素数随当前动画周期递增。
+8. 一轮播放完后重新洗牌。
 
 ## 8. 错误策略
 
@@ -186,7 +189,7 @@ Icon Loader 资源条目：
 2. Gemini 服务端配置和流式事件解析。
 3. 资产 manifest 校验与查询。
 4. Icon Loader 场景生成。
-5. Icon Loader 资源解码。
+5. Icon Loader 资源解码和展示网格转换。
 6. 填充顺序稳定性和完整性。
 7. 单轮资源顺序不重复。
 8. 构建脚本能把 SVG 转为资源 JSON。

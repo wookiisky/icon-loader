@@ -2,8 +2,12 @@ import { Application, Container, Graphics, Text, Ticker } from "pixi.js";
 import { iconLoaderResourceSchema } from "../asset-registry/icon-loader-resource-schema";
 import type { LoaderAssetRef } from "../loader-domain/loader-config";
 import { orderIconLoaderPoints } from "../loader-domain/icon-loader-fill-order";
-import { decodeIconLoaderResource } from "../loader-domain/icon-loader-resource";
-import type { IconLoaderColoredPoint, IconLoaderResource } from "../loader-domain/icon-loader-resource";
+import {
+  decodeIconLoaderResource,
+  iconLoaderDisplayGrid,
+  transformIconLoaderPointsToGrid,
+} from "../loader-domain/icon-loader-resource";
+import type { IconLoaderColoredPoint } from "../loader-domain/icon-loader-resource";
 import { createIconLoaderRound } from "../loader-domain/icon-loader-round-order";
 import type { IconLoaderRound } from "../loader-domain/icon-loader-round-order";
 import type { LoaderScenario } from "../loader-domain/loader-config";
@@ -14,7 +18,7 @@ const animationCycleMs = 1800;
 
 type IconLoaderResourceLoadState =
   | { kind: "loading" }
-  | { kind: "ready"; pattern: IconLoaderResource; points: IconLoaderColoredPoint[] }
+  | { kind: "ready"; points: IconLoaderColoredPoint[] }
   | { kind: "failed" };
 
 /** 绘制 Icon Loader，像素组合只作为等待娱乐。 */
@@ -75,10 +79,15 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
           return;
         }
 
+        const sourcePoints = decodeIconLoaderResource(parseResult.data);
+        const displayPoints = transformIconLoaderPointsToGrid(sourcePoints, {
+          sourceGrid: parseResult.data.baseResolution,
+          targetGrid: iconLoaderDisplayGrid,
+        });
+
         patternByAssetId.set(asset.id, {
           kind: "ready",
-          pattern: parseResult.data,
-          points: decodeIconLoaderResource(parseResult.data),
+          points: displayPoints,
         });
       })
       .catch(() => {
@@ -131,7 +140,7 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
         return;
       }
 
-      const grid = loadState.pattern.baseResolution;
+      const grid = iconLoaderDisplayGrid;
       const maxTileWidth = Math.floor((app.screen.width - horizontalPadding) / grid.columns);
       const maxTileHeight = Math.floor((app.screen.height - verticalReserved) / grid.rows);
       const tileSize = Math.max(1, Math.min(8, maxTileWidth, maxTileHeight));

@@ -71,9 +71,10 @@ src/
 2. 源码不再包含旧动画分支。
 3. manifest 只允许 `icon_loader`。
 4. 资源路径迁移到 `/assets/loaders/icon-loader/`。
-5. `pnpm test` 通过。
-6. `pnpm build` 通过。
-7. 本地页面能播放 Icon Loader。
+5. Loader 运行时将 `64 * 64` 资源转换为 `32 * 32` 展示点阵。
+6. `pnpm test` 通过。
+7. `pnpm build` 通过。
+8. 本地页面能播放 Icon Loader。
 
 ## 5. 后续扩展原则
 

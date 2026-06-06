@@ -10,7 +10,7 @@ Icon Loader 是一个桌面 Web 演示项目，用于把下载到本地的 icon 
 4. 请求期间展示 Icon Loader 动画。
 5. 顶部 `开始` / `停止` 按钮可手动控制 Loader 动画。
 6. Loader 不展示真实推理、真实进度、真实工具调用或真实链路状态。
-7. Icon Loader 使用构建期生成的 `64 列 * 64 行` 彩色 icon 资源，保留原 icon 的透明背景、颜色和轮廓信息。
+7. Icon Loader 使用构建期生成的 `64 列 * 64 行` 彩色 icon 资源，运行时转换为 `32 列 * 32 行` 点阵展示。
 
 ## Loader 播放规则
 
@@ -73,7 +73,7 @@ public/assets/loaders/icon-loader/patterns/*.pixel.json
 public/assets/loaders/manifest.json
 ```
 
-资源 JSON 使用 `palette + pixels` 编码。`pixels` 中每个元素为 `[x, y, paletteIndex, alphaByte]`，基准分辨率固定为 `64 * 64`；运行时按容器大小计算方块尺寸，因此同一份资源可以在不同展示尺寸下复用。
+资源 JSON 使用 `palette + pixels` 编码。`pixels` 中每个元素为 `[x, y, paletteIndex, alphaByte]`，基准分辨率固定为 `64 * 64`。运行时先按配置转换为 `32 * 32` 展示点阵，再按容器大小计算方块尺寸，因此同一份资源可以在不同展示尺寸下复用。
 
 ## 验证
 
@@ -98,12 +98,12 @@ pnpm build
 1. `server/`：Gemini API 代理、环境变量读取、流式转发、服务端错误收敛。
 2. `src/app/`：页面请求状态与 reducer。
 3. `src/gemini-client/`：浏览器读取本地代理 NDJSON 流。
-4. `src/loader-domain/`：纯类型、Icon Loader 资源解码、填充顺序和轮次顺序。
+4. `src/loader-domain/`：纯类型、Icon Loader 资源解码、展示网格转换、填充顺序和轮次顺序。
 5. `src/loader-generation/`：seed 驱动的 Icon Loader 场景生成。
 6. `src/asset-registry/`：资产 manifest 校验与查询。
 7. `src/loader-renderers/`：PixiJS 渲染器和生命周期。
 
-Icon Loader 资源格式和轮次顺序定义在 `src/loader-domain/` 的纯契约中。构建脚本负责把下载 icon 转成 `64 * 64` 彩色资源，配置生成器负责生成完整资源池，填充顺序和轮次顺序由 seed 稳定随机化，PixiJS 渲染器只负责加载和展示。
+Icon Loader 资源格式、展示网格配置和轮次顺序定义在 `src/loader-domain/` 的纯契约中。构建脚本负责把下载 icon 转成 `64 * 64` 彩色资源，运行时把资源转换为 `32 * 32` 展示点阵。配置生成器负责生成完整资源池，填充顺序和轮次顺序由 seed 稳定随机化，PixiJS 渲染器只负责加载和展示。
 
 ## 素材策略
 
