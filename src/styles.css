@@ -1,0 +1,233 @@
+:root {
+  color: #f8f4e3;
+  background: #0d0f12;
+  font-family: Georgia, "Times New Roman", serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 1100px;
+  min-height: 100vh;
+  background:
+    linear-gradient(90deg, rgba(244, 211, 94, 0.05) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(123, 223, 242, 0.04) 1px, transparent 1px),
+    #0d0f12;
+  background-size: 34px 34px;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(560px, 1fr) 420px;
+  align-items: start;
+  gap: 22px;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.workspace-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: calc(100vh - 48px);
+  border: 1px solid rgba(248, 244, 227, 0.18);
+  background: rgba(17, 19, 24, 0.88);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+}
+
+.app-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 30px 18px;
+  border-bottom: 1px solid rgba(248, 244, 227, 0.14);
+}
+
+.app-header-copy {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #7bdff2;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+h1 {
+  margin: 0;
+  max-width: 760px;
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.loader-controls {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.loader-control-button {
+  min-width: 72px;
+  min-height: 38px;
+  border: 1px solid rgba(248, 244, 227, 0.22);
+  border-radius: 6px;
+  color: #f8f4e3;
+  background: #15191f;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.loader-control-button-primary {
+  border-color: #f4d35e;
+  color: #111318;
+  background: #f4d35e;
+}
+
+.loader-control-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.prompt-form {
+  display: grid;
+  grid-template-columns: 1fr 112px;
+  gap: 14px;
+  padding: 24px 30px 18px;
+}
+
+.prompt-input {
+  width: 100%;
+  min-height: 128px;
+  resize: vertical;
+  border: 1px solid rgba(248, 244, 227, 0.18);
+  border-radius: 6px;
+  padding: 16px;
+  color: #f8f4e3;
+  background: #15191f;
+  outline: none;
+}
+
+.prompt-input:focus {
+  border-color: #7bdff2;
+  box-shadow: 0 0 0 3px rgba(123, 223, 242, 0.12);
+}
+
+.submit-button {
+  align-self: stretch;
+  border: 0;
+  border-radius: 6px;
+  color: #111318;
+  background: #f4d35e;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.submit-button:disabled {
+  cursor: not-allowed;
+  color: rgba(17, 19, 24, 0.62);
+  background: #8f8144;
+}
+
+.error-notice {
+  margin: 0 30px 16px;
+  border: 1px solid rgba(249, 87, 56, 0.45);
+  border-radius: 6px;
+  padding: 12px 14px;
+  color: #ffd1c8;
+  background: rgba(249, 87, 56, 0.12);
+}
+
+.reply-panel {
+  flex: 1;
+  min-height: 360px;
+  margin: 0 30px 30px;
+  border: 1px solid rgba(248, 244, 227, 0.16);
+  border-radius: 6px;
+  background: #0f1217;
+  overflow: auto;
+}
+
+.reply-text,
+.reply-placeholder {
+  margin: 0;
+  padding: 20px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #f8f4e3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.reply-placeholder {
+  color: rgba(248, 244, 227, 0.55);
+}
+
+.loader-showcase {
+  display: grid;
+  grid-template-rows: minmax(360px, 1fr);
+  align-self: start;
+  gap: 16px;
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+  height: calc(100vh - 48px);
+}
+
+.loader-tile {
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid rgba(248, 244, 227, 0.16);
+  border-radius: 6px;
+  background: rgba(15, 18, 23, 0.92);
+}
+
+.loader-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(248, 244, 227, 0.12);
+  color: #f8f4e3;
+  font-size: 14px;
+}
+
+.loader-tile-header small {
+  color: #7bdff2;
+}
+
+.loader-stage {
+  position: relative;
+  flex: 1;
+  min-height: 320px;
+}
+
+.loader-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.loader-resting {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 320px;
+  color: rgba(248, 244, 227, 0.48);
+}
