@@ -13,11 +13,27 @@ export type LoaderRendererHandle = {
 /** 单个 Loader 渲染器工厂函数。 */
 export type LoaderRendererFactory = (app: Application, scenario: LoaderScenario) => LoaderRendererHandle;
 
+/** PixiJS 应用创建尺寸约束。 */
+export type PixiApplicationSizeOptions = {
+  /** 容器宽度不可用或过小时使用的最小宽度。 */
+  minWidth: number;
+  /** 容器高度不可用或过小时使用的最小高度。 */
+  minHeight: number;
+};
+
+const defaultPixiApplicationSizeOptions: PixiApplicationSizeOptions = {
+  minWidth: 280,
+  minHeight: 180,
+};
+
 /** 创建并挂载 PixiJS 应用，统一设置生命周期参数。 */
-export async function createPixiApplication(container: HTMLElement): Promise<Application> {
+export async function createPixiApplication(
+  container: HTMLElement,
+  sizeOptions: PixiApplicationSizeOptions = defaultPixiApplicationSizeOptions,
+): Promise<Application> {
   const app = new Application();
-  const width = Math.max(container.clientWidth, 280);
-  const height = Math.max(container.clientHeight, 180);
+  const width = Math.max(container.clientWidth, sizeOptions.minWidth);
+  const height = Math.max(container.clientHeight, sizeOptions.minHeight);
 
   await app.init({
     width,

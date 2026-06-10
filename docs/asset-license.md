@@ -12,9 +12,11 @@
 Icon Loader 资产来源如下：
 
 1. Icons8 Flat Color Icons：来源 `https://github.com/icons8/flat-color-icons`，许可证记录为 `MIT OR Good Boy License`，当前不要求署名。
-2. OpenMoji：来源 `https://openmoji.org/`，许可证记录为 `CC BY-SA 4.0`，要求署名。
+2. Noto Emoji SVG：来源 `https://github.com/googlefonts/noto-emoji`，许可证依据为 `assets/icon-packs/noto-emoji/svg/LICENSE`，记录为 `Apache-2.0`，当前不要求界面署名。
 
-Noto Emoji 当前下载内容是字体文件，不包含单独 icon 文件，未进入本次资源构建。
+OpenMoji 本地数据和转换能力仍保留，但不进入默认资源构建。Noto Emoji 的字体目录使用 SIL Open Font License，本次不参与构建；本次只使用 `assets/icon-packs/noto-emoji/svg/*.svg`。
+
+Noto Emoji 的语义标签来自 `assets/icon-packs/noto-emoji/data/emoji_17_0_ordering.json`，来源为 `https://github.com/googlefonts/emoji-metadata`，许可证文件保存在 `assets/icon-packs/noto-emoji/data/emoji-metadata-LICENSE`，记录为 `Apache-2.0`。该 metadata 只用于生成 `label` 和 `tags`，不作为图形资源。
 
 ## 资源格式
 

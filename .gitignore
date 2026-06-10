@@ -9,9 +9,19 @@ dist/
 
 # 下载的原始素材，不进入提交范围
 assets/
+!assets/
+assets/*
+!assets/icon-packs/
+assets/icon-packs/*
+!assets/icon-packs/noto-emoji/
+assets/icon-packs/noto-emoji/*
+!assets/icon-packs/noto-emoji/data/
+!assets/icon-packs/noto-emoji/data/emoji_17_0_ordering.json
+!assets/icon-packs/noto-emoji/data/emoji-metadata-LICENSE
 
 # 构建期转换后的 Loader 资源，不进入提交范围
 public/assets/
 
 # 系统与编辑器本地文件
 .DS_Store
+.vercel

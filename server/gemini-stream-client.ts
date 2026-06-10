@@ -1,5 +1,5 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-import type { GeminiModelStreamEvent, GeminiServerConfig } from "./gemini-stream-types";
+import type { GeminiModelStreamEvent, GeminiServerConfig } from "./gemini-stream-types.js";
 
 const defaultGeminiModel = "gemini-3.1-pro-preview";
 const geminiThinkingLevel: GeminiServerConfig["thinkingLevel"] = "high";

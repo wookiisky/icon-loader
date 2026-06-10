@@ -30,6 +30,10 @@ type KeywordQueueTileProps = {
 
 const emptyKeywordIconQueue: readonly KeywordIconQueueItem[] = [];
 const visibleKeywordIconQueueLength = 5;
+const compactLoaderStageSize = {
+  minWidth: 110,
+  minHeight: 90,
+};
 
 /** 单个 PixiJS Loader 容器，负责挂载、启动和销毁 PixiJS 实例。 */
 function LoaderTile({ scenario, playing, title }: LoaderTileProps) {
@@ -46,7 +50,7 @@ function LoaderTile({ scenario, playing, title }: LoaderTileProps) {
     let cleanup: (() => void) | null = null;
 
     async function mount(): Promise<void> {
-      const app = await createPixiApplication(containerElement);
+      const app = await createPixiApplication(containerElement, compactLoaderStageSize);
       if (disposed) {
         destroyPixiApplication(app);
         return;
@@ -69,13 +73,12 @@ function LoaderTile({ scenario, playing, title }: LoaderTileProps) {
   }, [playing, scenario]);
 
   return (
-    <section className="loader-tile">
-      <div className="loader-tile-header">
+    <section className="loader-tile random-loader-tile">
+      <div className="loader-tile-header random-loader-tile-header">
         <span>{title}</span>
-        <small>{scenarioTitleMap[scenario.kind]} · {scenario.tempo}</small>
       </div>
-      <div className="loader-stage" ref={containerRef}>
-        {!playing ? <div className="loader-resting">等待启动</div> : null}
+      <div className="loader-stage random-loader-stage" ref={containerRef}>
+        {!playing ? <div className="loader-resting random-loader-resting">等待启动</div> : null}
       </div>
     </section>
   );
@@ -150,11 +153,6 @@ function KeywordQueueTile({ queue, playing }: KeywordQueueTileProps) {
     </section>
   );
 }
-
-const scenarioTitleMap: Record<LoaderScenario["kind"], string> = {
-  icon_loader: "Icon Loader",
-  keyword_icon_queue_loader: "Thinking Icons",
-};
 
 /** 多 Loader 展示区，Loader 生命周期跟随请求状态和手动控制状态。 */
 export function LoaderShowcase({ assetRegistry, manualSeed, playing, state }: LoaderShowcaseProps) {

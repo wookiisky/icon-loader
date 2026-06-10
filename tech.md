@@ -34,7 +34,9 @@
 系统拆成两条链路：
 
 1. 资源构建链路
-   - 从 `assets/icon-packs/` 读取本地 icon。
+   - 默认从 Icons8 Flat Color Icons 和 Noto Emoji SVG 读取本地 icon。
+   - OpenMoji 本地数据和转换能力保留，但不进入默认资源池。
+   - 使用 Noto Emoji metadata 生成 `label` 和 `tags`，metadata 只服务关键词匹配。
    - 使用 `sharp` 转换为 `64 * 64` RGBA 像素。
    - 过滤透明背景。
    - 生成 `palette + pixels` 编码资源。
@@ -133,7 +135,7 @@ type IconLoaderResource = {
 2. `pixels` 保存 `[x, y, paletteIndex, alphaByte]`。
 3. 透明背景不会进入输出。
 4. 基准分辨率固定为 `64 * 64`。
-5. 运行时展示分辨率配置为 `32 * 32`。
+5. 运行时展示分辨率配置为 `24 * 24`。
 6. 渲染前先将基准点阵转换为展示点阵，同一展示格使用 alpha 加权平均色和最大 alpha 聚合。
 7. 渲染器按容器尺寸计算像素块大小。
 
@@ -184,7 +186,7 @@ Icon Loader 资源条目：
 1. `generateIconLoaderScenario(seed, registry)` 从资源池读取全部可用 icon。
 2. 对资源池做不放回抽取，形成一轮 `icon_transition` 事件。
 3. 渲染器按时间确定当前事件。
-4. 渲染器加载 `64 * 64` 资源后转换为 `32 * 32` 展示点阵。
+4. 渲染器加载 `64 * 64` 资源后转换为 `24 * 24` 展示点阵。
 5. 每轮使用 `createIconLoaderRound` 派生 round seed。
 6. 每个事件使用 `createIconLoaderTransitionFrame` 计算当前帧点位。
 7. 通用装配内部按需使用 `orderIconLoaderPoints` 排序。

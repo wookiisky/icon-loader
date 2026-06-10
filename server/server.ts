@@ -1,11 +1,10 @@
 import express from "express";
-import { handleGeminiStreamRoute } from "./gemini-stream-route";
+import { handleGeminiStreamAccessRoute, handleGeminiStreamRoute } from "./gemini-stream-route.js";
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 8787);
 
-app.use(express.json({ limit: "32kb" }));
-app.post("/api/gemini/stream", handleGeminiStreamRoute);
+app.post("/api/gemini/stream", handleGeminiStreamAccessRoute, express.json({ limit: "32kb" }), handleGeminiStreamRoute);
 
 app.get("/api/health", (_request, response) => {
   response.json({ ok: true });

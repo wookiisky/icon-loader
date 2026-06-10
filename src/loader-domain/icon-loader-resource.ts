@@ -6,8 +6,8 @@ export const iconLoaderResourceGrid = {
 
 /** Icon Loader 运行时展示分辨率，渲染前会从基准资源转换到该网格。 */
 export const iconLoaderDisplayGrid = {
-  columns: 32,
-  rows: 32,
+  columns: 24,
+  rows: 24,
 } as const;
 
 /** Icon Loader 点阵网格尺寸。 */

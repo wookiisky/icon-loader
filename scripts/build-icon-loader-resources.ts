@@ -2,6 +2,7 @@ import { readdir, readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
+import { z } from "zod";
 import { loaderAssetManifestSchema } from "../src/asset-registry/asset-manifest-schema";
 import type { LoaderAssetManifest, LoaderAssetManifestItem } from "../src/asset-registry/asset-manifest-schema";
 import { iconLoaderResourceGrid } from "../src/loader-domain/icon-loader-resource";
@@ -11,8 +12,9 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const outputDirectory = path.join(repositoryRoot, "public/assets/loaders/icon-loader/patterns");
 const manifestPath = path.join(repositoryRoot, "public/assets/loaders/manifest.json");
 const generatedAssetKind = "icon_resource";
+const notoEmojiMetadataRelativePath = "assets/icon-packs/noto-emoji/data/emoji_17_0_ordering.json";
 
-type IconSource = {
+export type IconSource = {
   /** 生成后使用的稳定 ID。 */
   id: string;
   /** 生成后使用的展示名称。 */
@@ -42,12 +44,41 @@ type OpenMojiMetadata = {
   group: string;
 };
 
+type NotoEmojiMetadataValue = {
+  /** Noto Emoji 展示名称，来自 shortcode。 */
+  label: string;
+  /** Noto Emoji 参与关键词匹配的标签。 */
+  tags: string[];
+};
+
 type PixelExtractionResult = {
   /** RGB 调色板。 */
   palette: string[];
   /** 非透明像素元组。 */
   pixels: IconLoaderEncodedPixel[];
 };
+
+const notoEmojiMetadataEntrySchema = z.object({
+  base: z.array(z.number().int().nonnegative()),
+  alternates: z.array(z.array(z.number().int().nonnegative())),
+  emoticons: z.array(z.string()),
+  shortcodes: z.array(z.string()),
+});
+
+const notoEmojiMetadataGroupSchema = z.object({
+  group: z.string().min(1),
+  emoji: z.array(notoEmojiMetadataEntrySchema),
+});
+
+const notoEmojiMetadataSchema = z.array(notoEmojiMetadataGroupSchema);
+
+const openMojiMetadataSchema = z.array(
+  z.object({
+    hexcode: z.string().min(1),
+    annotation: z.string().min(1),
+    group: z.string().min(1),
+  }),
+);
 
 /** 将输入 icon 转换为 64 * 64 彩色 Icon Loader 资源。 */
 export async function convertIconSourceToIconResource(iconSource: IconSource): Promise<IconLoaderResource> {
@@ -135,17 +166,32 @@ async function extractPixelsFromIcon(sourcePath: string): Promise<PixelExtractio
 }
 
 /** 发现当前仓库中已下载的可独立处理 icon。 */
-async function discoverIconSources(): Promise<IconSource[]> {
-  const flatColorSources = await discoverFlatColorIconSources();
-  const openMojiSources = await discoverOpenMojiSources();
-  return [...flatColorSources, ...openMojiSources].sort((firstSource, secondSource) => {
+export async function discoverIconSources(rootDirectory: string = repositoryRoot): Promise<IconSource[]> {
+  const flatColorSources = await discoverFlatColorIconSources(rootDirectory);
+  const notoEmojiSources = await discoverNotoEmojiSources(rootDirectory);
+  return [...flatColorSources, ...notoEmojiSources].sort((firstSource, secondSource) => {
+    return firstSource.id.localeCompare(secondSource.id);
+  });
+}
+
+/** 发现当前仓库中已下载的 OpenMoji icon；该能力保留但不进入默认构建源。 */
+export async function discoverOpenMojiIconSources(rootDirectory: string = repositoryRoot): Promise<IconSource[]> {
+  return discoverOpenMojiSources(rootDirectory);
+}
+
+/** 发现当前仓库中已下载的全部历史 icon 源，供脚本维护和回归测试使用。 */
+export async function discoverAllAvailableIconSources(rootDirectory: string = repositoryRoot): Promise<IconSource[]> {
+  const flatColorSources = await discoverFlatColorIconSources(rootDirectory);
+  const notoEmojiSources = await discoverNotoEmojiSources(rootDirectory);
+  const openMojiSources = await discoverOpenMojiSources(rootDirectory);
+  return [...flatColorSources, ...notoEmojiSources, ...openMojiSources].sort((firstSource, secondSource) => {
     return firstSource.id.localeCompare(secondSource.id);
   });
 }
 
 /** 发现 Icons8 Flat Color Icons 的 SVG 文件。 */
-async function discoverFlatColorIconSources(): Promise<IconSource[]> {
-  const sourceDirectory = path.join(repositoryRoot, "assets/icon-packs/flat-color-icons/svg");
+async function discoverFlatColorIconSources(rootDirectory: string = repositoryRoot): Promise<IconSource[]> {
+  const sourceDirectory = path.join(rootDirectory, "assets/icon-packs/flat-color-icons/svg");
   const fileNames = await readdir(sourceDirectory);
 
   return fileNames
@@ -169,10 +215,115 @@ async function discoverFlatColorIconSources(): Promise<IconSource[]> {
     });
 }
 
+/** 发现 Noto Emoji 的 SVG 文件，并用上游 metadata 生成可匹配标签。 */
+export async function discoverNotoEmojiSources(rootDirectory: string = repositoryRoot): Promise<IconSource[]> {
+  const sourceDirectory = path.join(rootDirectory, "assets/icon-packs/noto-emoji/svg");
+  const metadataByCodepoints = await readNotoEmojiMetadataByCodepoints(rootDirectory);
+  const fileNames = await readdir(sourceDirectory);
+
+  return fileNames
+    .filter((fileName) => fileName.endsWith(".svg"))
+    .map((fileName) => {
+      return createNotoEmojiIconSource(fileName, metadataByCodepoints, rootDirectory);
+    });
+}
+
+/** 将 Noto Emoji 文件名转换为稳定资源描述。 */
+export function createNotoEmojiIconSource(
+  fileName: string,
+  metadataByCodepoints: ReadonlyMap<string, NotoEmojiMetadataValue>,
+  rootDirectory: string = repositoryRoot,
+): IconSource {
+  const codepoints = parseNotoEmojiFileName(fileName);
+  const metadata = metadataByCodepoints.get(codepoints.normalizedKey);
+  const relativeSourcePath = `assets/icon-packs/noto-emoji/svg/${fileName}`;
+  const fallbackLabel = `Noto Emoji ${codepoints.normalizedKey}`;
+
+  return {
+    id: `pixel-icon-noto-emoji-${codepoints.normalizedKey}`,
+    label: metadata?.label ?? fallbackLabel,
+    sourcePath: path.join(rootDirectory, relativeSourcePath),
+    relativeSourcePath,
+    outputFileName: `noto-emoji-${codepoints.normalizedKey}.pixel.json`,
+    license: "Apache-2.0",
+    source: "https://github.com/googlefonts/noto-emoji",
+    attributionRequired: false,
+    tags: metadata?.tags ?? ["noto-emoji", codepoints.normalizedKey],
+  };
+}
+
+/** 从 Noto Emoji SVG 文件名中解析码点。 */
+export function parseNotoEmojiFileName(fileName: string): { normalizedKey: string; codepoints: number[] } {
+  const match = /^emoji_u([0-9a-fA-F_]+)\.svg$/.exec(fileName);
+  if (match === null) {
+    throw new Error(`非法 Noto Emoji SVG 文件名：${fileName}`);
+  }
+
+  const codepoints = match[1].split("_").map((part) => Number.parseInt(part, 16));
+  if (codepoints.some((codepoint) => Number.isNaN(codepoint))) {
+    throw new Error(`非法 Noto Emoji 码点文件名：${fileName}`);
+  }
+
+  return {
+    codepoints,
+    normalizedKey: normalizeNotoEmojiCodepoints(codepoints),
+  };
+}
+
+/** 规范化 Noto Emoji 码点，统一 metadata 与 SVG 文件名差异。 */
+export function normalizeNotoEmojiCodepoints(codepoints: readonly number[]): string {
+  return codepoints
+    .filter((codepoint) => codepoint !== 0xfe0e && codepoint !== 0xfe0f)
+    .map((codepoint) => codepoint.toString(16).toLowerCase())
+    .join("-");
+}
+
+/** 读取 Noto Emoji metadata，提供 icon 展示名称和关键词标签。 */
+export async function readNotoEmojiMetadataByCodepoints(
+  rootDirectory: string = repositoryRoot,
+): Promise<Map<string, NotoEmojiMetadataValue>> {
+  const metadataPath = path.join(rootDirectory, notoEmojiMetadataRelativePath);
+  const rawMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as unknown;
+  const parseResult = notoEmojiMetadataSchema.safeParse(rawMetadata);
+  if (!parseResult.success) {
+    throw new Error(`Noto Emoji metadata 结构非法：${parseResult.error.message}`);
+  }
+
+  return createNotoEmojiMetadataByCodepoints(parseResult.data);
+}
+
+/** 将已清洗的 Noto metadata 转为按码点索引的查询表。 */
+export function createNotoEmojiMetadataByCodepoints(
+  metadataGroups: z.infer<typeof notoEmojiMetadataSchema>,
+): Map<string, NotoEmojiMetadataValue> {
+  const metadataByCodepoints = new Map<string, NotoEmojiMetadataValue>();
+
+  metadataGroups.forEach((metadataGroup) => {
+    metadataGroup.emoji.forEach((entry) => {
+      const label = createNotoEmojiLabel(entry.shortcodes, entry.base);
+      const tags = createNotoEmojiTags({
+        group: metadataGroup.group,
+        codepointKey: normalizeNotoEmojiCodepoints(entry.base),
+        label,
+        shortcodes: entry.shortcodes,
+        emoticons: entry.emoticons,
+      });
+      const metadataValue = { label, tags };
+      const sequences = [entry.base, ...entry.alternates];
+
+      sequences.forEach((sequence) => {
+        metadataByCodepoints.set(normalizeNotoEmojiCodepoints(sequence), metadataValue);
+      });
+    });
+  });
+
+  return metadataByCodepoints;
+}
+
 /** 发现 OpenMoji 的 SVG 文件；同名 PNG 视为同一 icon 的重复导出，不重复处理。 */
-async function discoverOpenMojiSources(): Promise<IconSource[]> {
-  const sourceDirectory = path.join(repositoryRoot, "assets/icon-packs/openmoji/color/svg");
-  const metadataByHexcode = await readOpenMojiMetadataByHexcode();
+async function discoverOpenMojiSources(rootDirectory: string = repositoryRoot): Promise<IconSource[]> {
+  const sourceDirectory = path.join(rootDirectory, "assets/icon-packs/openmoji/color/svg");
+  const metadataByHexcode = await readOpenMojiMetadataByHexcode(rootDirectory);
   const fileNames = await readdir(sourceDirectory);
 
   return fileNames
@@ -199,16 +350,50 @@ async function discoverOpenMojiSources(): Promise<IconSource[]> {
 }
 
 /** 读取 OpenMoji 元数据，提供 icon 展示名称和分组。 */
-async function readOpenMojiMetadataByHexcode(): Promise<Map<string, OpenMojiMetadata>> {
-  const metadataPath = path.join(repositoryRoot, "assets/icon-packs/openmoji/data/openmoji.json");
-  const rawMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as OpenMojiMetadata[];
+async function readOpenMojiMetadataByHexcode(rootDirectory: string = repositoryRoot): Promise<Map<string, OpenMojiMetadata>> {
+  const metadataPath = path.join(rootDirectory, "assets/icon-packs/openmoji/data/openmoji.json");
+  const rawMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as unknown;
+  const parseResult = openMojiMetadataSchema.safeParse(rawMetadata);
+  if (!parseResult.success) {
+    throw new Error(`OpenMoji metadata 结构非法：${parseResult.error.message}`);
+  }
   const metadataByHexcode = new Map<string, OpenMojiMetadata>();
 
-  rawMetadata.forEach((metadata) => {
+  parseResult.data.forEach((metadata) => {
     metadataByHexcode.set(metadata.hexcode, metadata);
   });
 
   return metadataByHexcode;
+}
+
+/** 从 Noto shortcode 生成可读标签。 */
+function createNotoEmojiLabel(shortcodes: readonly string[], fallbackCodepoints: readonly number[]): string {
+  const firstShortcode = shortcodes.find((shortcode) => shortcode.trim().length > 0);
+  if (firstShortcode === undefined) {
+    return `Noto Emoji ${normalizeNotoEmojiCodepoints(fallbackCodepoints)}`;
+  }
+
+  return createLabelFromSlug(firstShortcode.replace(/^:/, "").replace(/:$/, ""));
+}
+
+/** 生成 Noto Emoji 的关键词标签，供 Thinking Icon Queue 匹配。 */
+function createNotoEmojiTags(context: {
+  group: string;
+  codepointKey: string;
+  label: string;
+  shortcodes: readonly string[];
+  emoticons: readonly string[];
+}): string[] {
+  const rawTags = [
+    "noto-emoji",
+    context.group,
+    context.codepointKey,
+    context.label,
+    ...context.shortcodes.map((shortcode) => shortcode.replace(/^:/, "").replace(/:$/, "")),
+    ...context.emoticons,
+  ];
+
+  return Array.from(new Set(rawTags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)));
 }
 
 /** 读取现有 manifest，非法或缺失时回退为空清单。 */

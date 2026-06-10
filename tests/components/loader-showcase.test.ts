@@ -70,6 +70,72 @@ describe("resolveLoaderShowcaseSlotSeeds", () => {
     expect(new Set(seeds).size).toBe(3);
   });
 
+  it("随机 Loader 使用紧凑卡片样式并只展示 A/B/C 标题", () => {
+    const view = render(
+      createElement(LoaderShowcase, {
+        assetRegistry: createAssetRegistry({ assets: [] }),
+        manualSeed: null,
+        playing: false,
+        state: { kind: "idle" },
+      }),
+    );
+
+    expect(view.container.querySelectorAll(".random-loader-tile")).toHaveLength(3);
+    expect(view.container.querySelector(".keyword-queue-tile")?.classList.contains("random-loader-tile")).toBe(false);
+    expect(screen.getByText("A")).toBeInTheDocument();
+    expect(screen.getByText("B")).toBeInTheDocument();
+    expect(screen.getByText("C")).toBeInTheDocument();
+    expect(screen.queryByText("随机初始化 A")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Icon Loader ·/)).not.toBeInTheDocument();
+  });
+
+  it("随机 Loader 传入紧凑 Pixi 尺寸，Thinking Icons 保持默认尺寸", async () => {
+    rendererMocks.createPixiApplication.mockResolvedValue({
+      stage: { addChild: vi.fn() },
+      ticker: { add: vi.fn(), remove: vi.fn() },
+      screen: { width: 320, height: 200 },
+      canvas: document.createElement("canvas"),
+      destroy: vi.fn(),
+    });
+    rendererMocks.createLoaderRenderer.mockReturnValue({
+      setKeywordIconQueue: rendererMocks.setKeywordIconQueue,
+      destroy: rendererMocks.destroy,
+    });
+
+    render(
+      createElement(LoaderShowcase, {
+        assetRegistry: createAssetRegistry({ assets: [] }),
+        manualSeed: null,
+        playing: true,
+        state: {
+          kind: "loading",
+          requestId: "r1",
+          seed: 1,
+          startedAtMs: 100,
+          streamedText: "",
+          keywordIconQueueState: createEmptyKeywordIconQueueState(),
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(rendererMocks.createPixiApplication).toHaveBeenCalledTimes(4);
+    });
+    expect(rendererMocks.createPixiApplication).toHaveBeenNthCalledWith(1, expect.any(HTMLElement));
+    expect(rendererMocks.createPixiApplication).toHaveBeenNthCalledWith(2, expect.any(HTMLElement), {
+      minWidth: 110,
+      minHeight: 90,
+    });
+    expect(rendererMocks.createPixiApplication).toHaveBeenNthCalledWith(3, expect.any(HTMLElement), {
+      minWidth: 110,
+      minHeight: 90,
+    });
+    expect(rendererMocks.createPixiApplication).toHaveBeenNthCalledWith(4, expect.any(HTMLElement), {
+      minWidth: 110,
+      minHeight: 90,
+    });
+  });
+
   it("关键词队列更新通过 renderer 动态接口完成，不重建 Pixi", async () => {
     rendererMocks.createPixiApplication.mockResolvedValue({
       stage: { addChild: vi.fn() },

@@ -11,9 +11,9 @@ const fallbackLoaderSeed = 20260605;
 
 /** 三个固定展示槽位，同类 Loader 用不同 seed 初始化。 */
 export const loaderShowcaseSlots: LoaderShowcaseSlot[] = [
-  { id: "slot-a", title: "随机初始化 A", seedOffset: 0 },
-  { id: "slot-b", title: "随机初始化 B", seedOffset: 7919 },
-  { id: "slot-c", title: "随机初始化 C", seedOffset: 15401 },
+  { id: "slot-a", title: "A", seedOffset: 0 },
+  { id: "slot-b", title: "B", seedOffset: 7919 },
+  { id: "slot-c", title: "C", seedOffset: 15401 },
 ];
 
 /** 为三个 Loader 展示槽位派生稳定且互不相同的 seed。 */

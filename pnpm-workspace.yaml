@@ -2,6 +2,8 @@ packages:
   - "."
 allowBuilds:
   '@google/genai': set this to true or false
-  esbuild: set this to true or false
+  esbuild: true
   protobufjs: set this to true or false
   sharp: true
+minimumReleaseAgeExclude:
+  - vercel@54.10.3

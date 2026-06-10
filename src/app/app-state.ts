@@ -18,6 +18,7 @@ export type AppRequestState =
 export type AppErrorKind =
   | "empty_prompt"
   | "duplicate_submit"
+  | "gemini_access_denied"
   | "gemini_request_failed"
   | "gemini_stream_interrupted"
   | "gemini_response_invalid"

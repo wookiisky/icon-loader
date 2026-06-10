@@ -12,7 +12,7 @@ Icon Loader 是一个桌面 Web 演示项目，用于把下载到本地的 icon 
 6. 顶部 `开始` / `停止` 按钮可手动控制随机 Loader 动画。
 7. Loader 不展示真实进度、真实工具调用或真实链路状态。
 8. `thoughtSignature` 是 Gemini opaque 签名，只能按协议原样保留或回传，项目不解析、不解码、不发送到浏览器。
-9. Icon Loader 使用构建期生成的 `64 列 * 64 行` 彩色 icon 资源，随机 Loader 运行时转换为 `32 列 * 32 行` 点阵展示，Thinking Icon Queue 转换为 `16 列 * 16 行` 点阵展示。
+9. Icon Loader 使用构建期生成的 `64 列 * 64 行` 彩色 icon 资源，随机 Loader 运行时转换为 `24 列 * 24 行` 点阵展示，Thinking Icon Queue 转换为 `16 列 * 16 行` 点阵展示。
 10. 随机 Icon Loader 播放的是图标之间的娱乐性切换效果，不表达真实进度。
 
 ## Loader 播放规则
@@ -52,6 +52,7 @@ Icon Loader 是一个桌面 Web 演示项目，用于把下载到本地的 icon 
 ```bash
 GOOGLE_API_KEY=your_google_api_key
 GEMINI_MODEL=gemini-3.1-pro-preview
+PASS=your_access_pass
 API_PORT=8787
 ```
 
@@ -59,8 +60,10 @@ API_PORT=8787
 
 1. `GOOGLE_API_KEY` 只由 `server/` 读取，不进入浏览器代码。
 2. `GEMINI_MODEL` 可选，默认是 `gemini-3.1-pro-preview`。
-3. `API_PORT` 可选，默认是 `8787`。
-4. Gemini 请求会设置 `thinkingConfig.includeThoughts: true`。如果模型不返回可见 thought 文本，页面只展示正常回复和等待态队列。
+3. `PASS` 必填，只由服务端读取；页面 URL 必须携带 `?pass=your_access_pass` 才能调用 Gemini。
+4. `API_PORT` 可选，默认是 `8787`。
+5. Gemini 请求会设置 `thinkingConfig.includeThoughts: true`。如果模型不返回可见 thought 文本，页面只展示正常回复和等待态队列。
+6. URL 中必须恰好出现一次 `pass` 参数；重复、缺失或不匹配都会返回无权限错误。`pass` 会进入浏览器历史、访问日志和 Referer。
 
 ## 启动
 
@@ -72,7 +75,7 @@ pnpm dev
 打开 Vite 输出的本地地址，通常是：
 
 ```text
-http://127.0.0.1:5173
+http://127.0.0.1:5173/?pass=your_access_pass
 ```
 
 ## Icon 资源构建
@@ -87,9 +90,9 @@ pnpm build:icon-resources
 当前处理范围：
 
 1. `assets/icon-packs/flat-color-icons/svg/*.svg`
-2. `assets/icon-packs/openmoji/color/svg/*.svg`
+2. `assets/icon-packs/noto-emoji/svg/*.svg`
 
-OpenMoji 同时存在 SVG 和 PNG 导出时，以 SVG 作为同一个 icon 的规范来源，避免重复生成。Noto Emoji 当前下载内容是字体文件，不包含单独 icon 文件，暂不从字体拆分 glyph。
+OpenMoji 的本地数据和转换能力仍保留，但不进入默认构建源。Noto Emoji 只使用 SVG 图形资源，不使用 PNG，也不从字体拆分 glyph。Noto Emoji 的 `label` 和 `tags` 使用 `assets/icon-packs/noto-emoji/data/emoji_17_0_ordering.json` 生成；该 metadata 来自 `googlefonts/emoji-metadata`，只用于关键词匹配，不作为图形资源。若 metadata 未覆盖某个 SVG，构建会使用 `Noto Emoji <codepoints>` 和码点标签兜底。
 
 输出位置：
 
@@ -98,7 +101,7 @@ public/assets/loaders/icon-loader/patterns/*.pixel.json
 public/assets/loaders/manifest.json
 ```
 
-资源 JSON 使用 `palette + pixels` 编码。`pixels` 中每个元素为 `[x, y, paletteIndex, alphaByte]`，基准分辨率固定为 `64 * 64`。运行时先按配置转换为 `32 * 32` 展示点阵，再按容器大小计算方块尺寸，因此同一份资源可以在不同展示尺寸下复用。
+资源 JSON 使用 `palette + pixels` 编码。`pixels` 中每个元素为 `[x, y, paletteIndex, alphaByte]`，基准分辨率固定为 `64 * 64`。运行时先按配置转换为 `24 * 24` 展示点阵，再按容器大小计算方块尺寸，因此同一份资源可以在不同展示尺寸下复用。
 
 ## 验证
 
@@ -114,7 +117,69 @@ pnpm test
 pnpm build
 ```
 
-真实 API 验收需要本机存在可用的 `GOOGLE_API_KEY`。如果没有配置密钥，页面会展示明确错误，不会暴露服务端堆栈。
+真实 API 验收需要本机存在可用的 `GOOGLE_API_KEY` 和 `PASS`。如果没有配置密钥或访问口令，页面会展示明确错误，不会暴露服务端堆栈。
+
+## Vercel 部署
+
+部署形态：
+
+1. Vite 构建前端静态产物，输出目录是 `dist`。
+2. `api/gemini/stream.ts` 部署为 Vercel Node.js Function，继续通过 `/api/gemini/stream` 提供 NDJSON 流式回复。
+3. `GOOGLE_API_KEY` 和 `PASS` 只配置在 Vercel Project Environment Variables，不写入源码、`vercel.json` 或前端环境变量。
+
+首次准备：
+
+```bash
+pnpm install
+pnpm vercel:link
+```
+
+在 Vercel Dashboard 的 Project Settings -> Environment Variables 中配置：
+
+```text
+GOOGLE_API_KEY=your_google_api_key
+GEMINI_MODEL=gemini-3.1-pro-preview
+PASS=your_access_pass
+```
+
+说明：
+
+1. `GOOGLE_API_KEY` 和 `PASS` 必填，并至少配置到 Production；如果要验证预览部署，也要配置到 Preview。
+2. `GEMINI_MODEL` 可选，不配置时服务端默认使用 `gemini-3.1-pro-preview`。
+3. `GEMINI_MODEL` 必须是支持 `thinkingLevel: high` 的 Gemini 3 系列或更新模型。
+4. 不需要配置 `API_PORT`；Vercel Function 不使用本地 Express 端口。
+
+本地模拟 Vercel 构建：
+
+```bash
+pnpm vercel:pull:production
+pnpm exec vercel build --prod
+```
+
+预览部署：
+
+```bash
+pnpm vercel:preview
+```
+
+生产部署：
+
+```bash
+pnpm exec vercel build --prod
+pnpm exec vercel deploy --prebuilt --prod
+```
+
+部署后验收：
+
+1. 打开带 `?pass=your_access_pass` 的部署 URL。
+2. 访问 `/api/health`，确认返回 `{ "ok": true }`。
+3. 在页面输入问题，确认回复逐块显示，Loader 动画和 Thinking Icon Queue 行为正常。
+4. 如果页面提示缺少密钥、访问口令或模型不支持，回到 Vercel Environment Variables 检查 `GOOGLE_API_KEY`、`PASS` 和 `GEMINI_MODEL`。
+
+部署约束：
+
+1. `api/` 和 `server/` 中会被 Node.js 或 Vercel Function 直接运行的本地相对 import 必须写 `.js` 后缀。
+2. TypeScript 会在源码中把 `.js` 后缀解析到对应 `.ts` 文件，编译后保留 `.js`，避免 Vercel Node ESM 运行时找不到模块。
 
 ## 架构
 
@@ -128,10 +193,10 @@ pnpm build
 6. `src/asset-registry/`：资产 manifest 校验与查询。
 7. `src/loader-renderers/`：PixiJS 渲染器和生命周期。
 
-Icon Loader 资源格式、展示网格配置、切换效果和轮次顺序定义在 `src/loader-domain/` 的纯契约中。构建脚本负责把下载 icon 转成 `64 * 64` 彩色资源，运行时把资源转换为 `32 * 32` 展示点阵。配置生成器负责生成完整资源池和稳定随机切换效果，PixiJS 渲染器只负责加载和展示。
+Icon Loader 资源格式、展示网格配置、切换效果和轮次顺序定义在 `src/loader-domain/` 的纯契约中。构建脚本负责把默认源 Icons8 Flat Color Icons 和 Noto Emoji SVG 转成 `64 * 64` 彩色资源，运行时把资源转换为 `24 * 24` 展示点阵。配置生成器负责生成完整资源池和稳定随机切换效果，PixiJS 渲染器只负责加载和展示。
 
 Thinking Icon Queue 的关键词提取是纯逻辑，服务端只把清洗后的 `thought_keyword` 事件发给浏览器，不把 thought 原文或 `thoughtSignature` 发到前端。关键词到 icon 的匹配发生在浏览器边界，复用 `icon_loader` 的 `icon_resource` 资产池；reducer 维护已匹配好的最近 10 个逻辑队列项和请求生命周期计数，最近 10 个内同一 icon 不重复，同一请求生命周期内同一 icon 最多成功出现 2 次；渲染器只展示最新 5 个单行槽位，并避免退场动画和新入场 icon 短暂重复。
 
 ## 素材策略
 
-当前只保留 Icon Loader。新增素材进入 `public/assets/loaders/manifest.json` 时必须记录来源、许可证和署名要求。
+当前只保留 Icon Loader。新增素材进入 `public/assets/loaders/manifest.json` 时必须记录来源、许可证和署名要求。OpenMoji 资产和转换脚本能力保留为非默认素材源。
