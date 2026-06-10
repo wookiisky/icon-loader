@@ -7,15 +7,16 @@ import {
   transformIconLoaderPointsToGrid,
 } from "../loader-domain/icon-loader-resource";
 import type { IconLoaderColoredPoint } from "../loader-domain/icon-loader-resource";
-import { createIconLoaderRound } from "../loader-domain/icon-loader-round-order";
-import type { IconLoaderRound } from "../loader-domain/icon-loader-round-order";
 import type { LoaderScenario } from "../loader-domain/loader-config";
 import type { IconLoaderEvent } from "../loader-domain/loader-event";
 import { createIconLoaderTransitionFrame } from "../loader-domain/icon-loader-transition-frame";
 import type { IconLoaderFramePoint } from "../loader-domain/icon-loader-transition-frame";
 import type { LoaderRendererHandle } from "./pixi-loader-stage";
-
-const animationCycleMs = 1800;
+import {
+  createIconLoaderTimelineRound,
+  resolveIconLoaderTimelineRoundFrame,
+} from "./icon-loader-timeline";
+import type { IconLoaderTimelineFrame, IconLoaderTimelineRound } from "./icon-loader-timeline";
 
 type IconLoaderResourceLoadState =
   | { kind: "loading" }
@@ -36,9 +37,8 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
     },
   });
   let elapsedMs = 0;
-  let cachedRoundIndex = -1;
-  let cachedRound: IconLoaderRound | null = null;
-  let lastRenderedAssetId: string | undefined;
+  let timelineRoundStartMs = 0;
+  let cachedTimelineRound: IconLoaderTimelineRound | null = null;
   const events = scenario.events.filter((event): event is IconLoaderEvent => event.kind === "icon_transition");
   const assetById = new Map(scenario.assets.map((asset) => [asset.id, asset]));
   const patternByAssetId = new Map<string, IconLoaderResourceLoadState>();
@@ -46,26 +46,33 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
   root.addChild(pixels, title);
   app.stage.addChild(root);
 
-  function activeRoundEvent(): { event: IconLoaderEvent; roundSeed: number } | null {
+  function activeTimelineFrame(): IconLoaderTimelineFrame | null {
     if (events.length === 0) {
       return null;
     }
 
-    const stepIndex = Math.floor(elapsedMs / animationCycleMs);
-    const roundIndex = Math.floor(stepIndex / events.length);
-    const eventIndex = stepIndex % events.length;
-
-    if (cachedRound === null || cachedRoundIndex !== roundIndex) {
-      cachedRoundIndex = roundIndex;
-      cachedRound = createIconLoaderRound(events, scenario.seed, roundIndex, {
-        previousLastAssetId: lastRenderedAssetId,
+    if (cachedTimelineRound === null) {
+      cachedTimelineRound = createIconLoaderTimelineRound({
+        events,
+        scenarioSeed: scenario.seed,
+        roundIndex: 0,
       });
     }
 
-    return {
-      event: cachedRound.events[eventIndex],
-      roundSeed: cachedRound.seed,
-    };
+    while (elapsedMs >= timelineRoundStartMs + cachedTimelineRound.durationMs) {
+      timelineRoundStartMs += cachedTimelineRound.durationMs;
+      cachedTimelineRound = createIconLoaderTimelineRound({
+        events,
+        scenarioSeed: scenario.seed,
+        roundIndex: cachedTimelineRound.roundIndex + 1,
+        previousLastAssetId: cachedTimelineRound.lastAssetId,
+      });
+    }
+
+    return resolveIconLoaderTimelineRoundFrame({
+      timelineRound: cachedTimelineRound,
+      roundElapsedMs: elapsedMs - timelineRoundStartMs,
+    });
   }
 
   function ensurePatternLoaded(asset: LoaderAssetRef): void {
@@ -107,7 +114,7 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
 
   function drawFrame(ticker: Ticker): void {
     elapsedMs += ticker.deltaMS;
-    const active = activeRoundEvent();
+    const active = activeTimelineFrame();
     const horizontalPadding = 34;
     const verticalReserved = 52;
 
@@ -148,7 +155,7 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
       const gridHeight = grid.rows * tileSize;
       const originX = app.screen.width / 2 - gridWidth / 2;
       const originY = app.screen.height / 2 - gridHeight / 2 + 8;
-      const phase = (elapsedMs % animationCycleMs) / animationCycleMs;
+      const phase = active.transitionProgress;
       const pulseAlpha = 0.78 + Math.sin(phase * Math.PI) * Math.min(0.2, event.burst / 120);
       const framePoints = createIconLoaderTransitionFrame({
         points: loadState.points,
@@ -172,7 +179,6 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
         });
       });
 
-      lastRenderedAssetId = event.assetId;
       title.text = "Icon Loader";
     } else {
       title.text = events.length === 0 ? "Icon Loader · 等待素材" : "Icon Loader";

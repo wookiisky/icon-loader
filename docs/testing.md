@@ -9,19 +9,21 @@ pnpm test
 覆盖：
 
 1. 页面请求状态 reducer。
-2. Loader 手动播放和请求触发播放的组合规则。
-3. 三个 Loader 展示槽位的 seed 派生规则，确保同屏初始化不同。
-4. Gemini 服务端环境变量读取、默认模型和 high thinking 配置。
-5. Gemini 可见 thought part 提取、`includeThoughts: true` 配置，以及不读取 `thoughtSignature`。
-6. 浏览器 NDJSON 流式事件解析，包括 `thought_keyword`。
-7. Thinking 关键词清洗、半截流式 token 拼接、重复过滤和请求末尾冲洗。
-8. 关键词到 icon 资产匹配，确认复用 `icon_loader` 的 `icon_resource` 资产池。
-9. 资产 manifest 校验与查询。
-10. seed 驱动的 Icon Loader 配置生成。
-11. Icon Loader 单轮覆盖完整 icon 资源池、同一轮图形不重复、多 icon 情况下跨轮边界不相邻重复、生成资源固定为 `64 列 * 64 行`、颜色可保留、填充顺序、切换效果和轮次顺序稳定随机化。
-12. Icon Loader 切换帧计算覆盖旧填充、像素雨、磁吸重组、环形装配、列老虎机、雷达扫描和空点阵降级。
-13. Thinking Icon Queue 追加、逻辑队列最多 10 个、界面单行展示最新 5 个、最近 10 个内同一 icon 不重复、同一请求生命周期内同一 icon 最多成功出现 2 次、连续重复跳过、重复跳过不触发现有 icon 重入场动画、关键词更新不重建 Pixi。
-14. 资产清单加载中先收到 thought keyword 时，清单 ready 后回放匹配；请求已结束后不会回放过期关键词。
+2. 控制区输入框普通回车发送、`Shift + Enter` 换行、输入法合成态回车不误发、禁用态回车不绕过提交限制。
+3. Loader 手动播放和请求触发播放的组合规则。
+4. 三个 Loader 展示槽位的 seed 派生规则，确保同屏初始化不同。
+5. Gemini 服务端环境变量读取、默认模型和 high thinking 配置。
+6. Gemini 可见 thought part 提取、`includeThoughts: true` 配置，以及不读取 `thoughtSignature`。
+7. 浏览器 NDJSON 流式事件解析，包括 `thought_keyword`。
+8. Thinking 关键词清洗、半截流式 token 拼接、重复过滤和请求末尾冲洗。
+9. 关键词到 icon 资产匹配，确认复用 `icon_loader` 的 `icon_resource` 资产池。
+10. 资产 manifest 校验与查询。
+11. seed 驱动的 Icon Loader 配置生成。
+12. Icon Loader 单轮覆盖完整 icon 资源池、同一轮图形不重复、多 icon 情况下跨轮边界不相邻重复、生成资源固定为 `64 列 * 64 行`、颜色可保留、填充顺序、切换效果和轮次顺序稳定随机化。
+13. Icon Loader 时间线按 `durationMs + 0.5 秒停留` 播放，停留段保持当前 icon 且切换进度固定为 1，超过停留段后再进入下一个 icon。
+14. Icon Loader 切换帧计算覆盖旧填充、像素雨、磁吸重组、环形装配、列老虎机、雷达扫描和空点阵降级。
+15. Thinking Icon Queue 追加、逻辑队列最多 10 个、界面单行展示最新 5 个、最近 10 个内同一 icon 不重复、同一请求生命周期内同一 icon 最多成功出现 2 次、连续重复跳过、重复跳过不触发现有 icon 重入场动画、关键词更新不重建 Pixi。
+16. 资产清单加载中先收到 thought keyword 时，清单 ready 后回放匹配；请求已结束后不会回放过期关键词。
 
 ## 构建验证
 
@@ -92,7 +94,7 @@ pnpm build:icon-resources
 验收路径：
 
 1. 打开 `http://127.0.0.1:5173/?pass=<PASS 的值>`。
-2. 输入非空问题并提交。
+2. 输入非空问题，确认普通回车会提交，`Shift + Enter` 会换行；中文输入法选词确认时按回车不会误提交。
 3. 确认回复逐步显示。
 4. 确认 3 个 Icon Loader 在请求中同时播放，且初始动画不同。
 5. 确认 Thinking Icon Queue 在请求中显示：若模型返回可见 thought summary，应有 16x16 像素 icon append，逻辑队列最多保留最近 10 个用于去重，界面单行展示最新 5 个，满 5 项后追加时不保留被挤出项退场，队列外不短暂露出第 6 个 icon；最近 10 个内同一 icon 不重复，同一请求生命周期内同一 icon 最多成功出现 2 次；重复匹配不会 append，退场动画也不应和新入场 icon 短暂重复；若资产清单稍后才加载完成，早到的关键词应在清单 ready 后显示；若模型没有返回可见 thought summary，队列保持等待态且回复正常继续。
@@ -100,7 +102,7 @@ pnpm build:icon-resources
 7. 点击顶部 `开始`，确认无请求时 3 个随机 Loader 也会播放。
 8. 点击顶部 `停止`，确认无请求时 3 个随机 Loader 回到等待态。
 9. 请求进行中点击 `停止`，确认随机 Loader 仍由请求触发继续播放。
-10. 确认 Icon Loader 不展示灰色待填充方格，随机 Loader 以 24x24 点阵在固定区域内切换多个彩色 icon，颜色和轮廓可识别，单轮不重复，下一轮顺序发生变化，且多 icon 情况下跨轮边界不相邻重复。
+10. 确认 Icon Loader 不展示灰色待填充方格，随机 Loader 以 24x24 点阵在固定区域内切换多个彩色 icon，颜色和轮廓可识别，每次切换完成后停留约 0.5 秒，单轮不重复，下一轮顺序发生变化，且多 icon 情况下跨轮边界不相邻重复。
 11. 确认切换效果会在旧填充、像素雨、磁吸重组、环形装配、列老虎机和雷达扫描之间稳定变化。
 12. 确认随机初始化 A/B/C 展示区面积约为旧版四分之一，标题只显示 A/B/C，移动端无横向溢出或标题重叠。
 13. 确认 Thinking Icon Queue 仍保持 16x16 点阵，没有被随机初始化展示区的缩小规则影响。
@@ -121,9 +123,13 @@ pnpm build:icon-resources
 部署：
 
 ```bash
-pnpm exec vercel build --prod
-pnpm exec vercel deploy --prebuilt --prod
+pnpm vercel:prod
 ```
+
+说明：
+
+1. 当前生产部署使用 prebuilt archive，上传对象是 `.vercel/output`，上传次数主要由 `--archive=tgz` 控制。
+2. `.vercelignore` 主要约束普通 source deploy 或误操作时的上传范围，不作为 prebuilt 上传次数的核心控制手段。
 
 验收路径：
 

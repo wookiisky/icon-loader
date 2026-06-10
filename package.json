@@ -13,9 +13,9 @@
     "server": "tsx server/server.ts",
     "vercel:link": "vercel link",
     "vercel:pull:production": "vercel pull --yes --environment=production",
-    "vercel:build": "vercel build",
+    "vercel:build": "vercel build --prod",
     "vercel:preview": "vercel",
-    "vercel:prod": "vercel --prod"
+    "vercel:prod": "vercel build --prod && vercel deploy --prebuilt --prod --archive=tgz"
   },
   "dependencies": {
     "@google/genai": "^1.3.0",

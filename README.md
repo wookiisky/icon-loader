@@ -4,7 +4,7 @@ Icon Loader 是一个桌面 Web 演示项目，用于把下载到本地的 icon 
 
 ## 功能
 
-1. 输入问题并提交。
+1. 输入问题并提交，输入框内普通回车即发送，`Shift + Enter` 保留换行。
 2. 通过本地 Node 代理调用 Gemini 真实 API。
 3. 浏览器逐块展示 Gemini 流式回复。
 4. 请求期间同时展示 3 个随机 Icon Loader 动画。
@@ -23,7 +23,7 @@ Icon Loader 是一个桌面 Web 演示项目，用于把下载到本地的 icon 
 4. 请求结束且手动播放关闭后，Loader 回到等待态。
 5. 页面固定展示 3 个同类 Icon Loader；每次请求或手动开始都会生成基础 seed，三个展示槽位再派生不同 seed，因此初始动画不同。
 6. Icon Loader 每轮播放完整 icon 资源池，单轮内不重复；播完一轮后派生新轮次 seed 并重新洗牌，多 icon 情况下会避免跨轮边界相邻重复。
-7. 每次切换会稳定选择一种效果：通用装配、列老虎机或雷达显影。
+7. 每次切换会稳定选择一种效果：通用装配、列老虎机或雷达显影；切换完成后停留 0.5 秒再进入下一个 icon。
 8. Thinking Icon Queue 只在 Gemini 请求进行中展示。收到 thought keyword 后 append，逻辑队列最多保留最近 10 个用于去重；最近 10 个内同一 icon 只能出现一次，重复匹配会跳过；界面只显示最新 5 个并保持单行 5 槽；同一请求生命周期内同一 icon 最多成功出现 2 次，第 3 次起跳过。
 9. 如果资产清单仍在加载，收到的 thought keyword 会短暂缓存，清单 ready 后再匹配 icon。
 10. 如果模型或 SDK 没有返回可见 thought 文本，Thinking Icon Queue 保持等待态，主回复链路不受影响。
@@ -165,8 +165,7 @@ pnpm vercel:preview
 生产部署：
 
 ```bash
-pnpm exec vercel build --prod
-pnpm exec vercel deploy --prebuilt --prod
+pnpm vercel:prod
 ```
 
 部署后验收：

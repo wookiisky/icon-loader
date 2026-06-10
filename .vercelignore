@@ -1,0 +1,34 @@
+# 依赖、本地缓存与构建产物
+node_modules/
+.vercel/
+dist/
+coverage/
+.turbo/
+.vite/
+
+# 本地环境与日志
+.env
+.env.*
+!.env.example
+*.log
+pnpm-debug.log*
+yarn-debug.log*
+
+# 测试与本地验证
+tests/
+vitest.config.ts
+
+# 文档、需求与过程记录
+docs/
+README.md
+req.md
+plan.md
+tech.md
+
+# 原始素材不参与默认 Vercel 构建；运行时使用 public/assets 下的已生成资源
+assets/
+
+# 系统与编辑器本地文件
+.DS_Store
+.idea/
+.vscode/
