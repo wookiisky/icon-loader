@@ -1,5 +1,5 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-import type { GeminiServerConfig } from "./gemini-stream-types";
+import type { GeminiModelStreamEvent, GeminiServerConfig } from "./gemini-stream-types";
 
 const defaultGeminiModel = "gemini-3.1-pro-preview";
 const geminiThinkingLevel: GeminiServerConfig["thinkingLevel"] = "high";
@@ -43,11 +43,11 @@ export function readGeminiServerConfig(env: NodeJS.ProcessEnv): GeminiServerConf
   };
 }
 
-/** 调用 Gemini 流式生成接口，并只向上游暴露文本块。 */
-export async function* streamGeminiText(
+/** 调用 Gemini 流式生成接口，并向路由暴露文本块和可见 thought 文本。 */
+export async function* streamGeminiEvents(
   prompt: string,
   config: GeminiServerConfig,
-): AsyncGenerator<string> {
+): AsyncGenerator<GeminiModelStreamEvent> {
   const ai = new GoogleGenAI({ apiKey: config.apiKey });
   const response = await ai.models.generateContentStream({
     model: config.model,
@@ -55,14 +55,62 @@ export async function* streamGeminiText(
     config: {
       thinkingConfig: {
         thinkingLevel: toGeminiSdkThinkingLevel(config.thinkingLevel),
+        includeThoughts: true,
       },
     },
   });
 
   for await (const chunk of response) {
+    const thoughtTexts = extractVisibleThoughtTexts(chunk);
+    for (const thoughtText of thoughtTexts) {
+      yield { kind: "thought_text", text: thoughtText };
+    }
+
     const text = chunk.text;
     if (typeof text === "string" && text.length > 0) {
-      yield text;
+      yield { kind: "text_chunk", text };
     }
   }
+}
+
+/** 从 Gemini chunk 中读取可见 thought 文本，不读取 opaque thoughtSignature。 */
+export function extractVisibleThoughtTexts(chunk: unknown): string[] {
+  if (typeof chunk !== "object" || chunk === null || !("candidates" in chunk)) {
+    return [];
+  }
+
+  const candidates = (chunk as { candidates?: unknown }).candidates;
+  if (!Array.isArray(candidates)) {
+    return [];
+  }
+
+  return candidates.flatMap((candidate) => extractCandidateThoughtTexts(candidate));
+}
+
+/** 从单个 candidate 中读取 thought part 文本。 */
+function extractCandidateThoughtTexts(candidate: unknown): string[] {
+  if (typeof candidate !== "object" || candidate === null || !("content" in candidate)) {
+    return [];
+  }
+
+  const content = (candidate as { content?: unknown }).content;
+  if (typeof content !== "object" || content === null || !("parts" in content)) {
+    return [];
+  }
+
+  const parts = (content as { parts?: unknown }).parts;
+  if (!Array.isArray(parts)) {
+    return [];
+  }
+
+  return parts
+    .filter((part): part is { thought: true; text: string } => {
+      if (typeof part !== "object" || part === null) {
+        return false;
+      }
+
+      const record = part as { thought?: unknown; text?: unknown };
+      return record.thought === true && typeof record.text === "string" && record.text.length > 0;
+    })
+    .map((part) => part.text);
 }

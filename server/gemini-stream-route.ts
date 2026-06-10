@@ -1,6 +1,11 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { readGeminiServerConfig, streamGeminiText } from "./gemini-stream-client";
+import {
+  appendThoughtTextAndExtractKeywords,
+  createThoughtKeywordExtractorState,
+  flushThoughtKeywordExtractor,
+} from "../src/loader-domain/thought-keyword";
+import { readGeminiServerConfig, streamGeminiEvents } from "./gemini-stream-client";
 import type { GeminiStreamServerEvent } from "./gemini-stream-types";
 
 const geminiRequestSchema = z.object({
@@ -41,12 +46,26 @@ export async function handleGeminiStreamRoute(request: Request, response: Respon
   response.setHeader("X-Accel-Buffering", "no");
 
   let hasWrittenChunk = false;
+  let keywordExtractorState = createThoughtKeywordExtractorState();
   try {
-    for await (const text of streamGeminiText(parseResult.data.prompt, config)) {
-      hasWrittenChunk = true;
-      writeStreamEvent(response, { kind: "chunk", text });
+    for await (const event of streamGeminiEvents(parseResult.data.prompt, config)) {
+      if (event.kind === "text_chunk") {
+        hasWrittenChunk = true;
+        writeStreamEvent(response, { kind: "chunk", text: event.text });
+        continue;
+      }
+
+      const result = appendThoughtTextAndExtractKeywords(keywordExtractorState, event.text);
+      keywordExtractorState = result.state;
+      result.keywords.forEach((keyword) => {
+        writeStreamEvent(response, { kind: "thought_keyword", keyword: keyword.value });
+      });
     }
 
+    const flushResult = flushThoughtKeywordExtractor(keywordExtractorState);
+    flushResult.keywords.forEach((keyword) => {
+      writeStreamEvent(response, { kind: "thought_keyword", keyword: keyword.value });
+    });
     writeStreamEvent(response, { kind: "done" });
     response.end();
   } catch {

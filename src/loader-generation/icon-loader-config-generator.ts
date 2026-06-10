@@ -2,6 +2,7 @@ import type { AssetRegistry } from "../asset-registry/asset-registry";
 import type { LoaderScenario } from "../loader-domain/loader-config";
 import type { IconLoaderEvent } from "../loader-domain/loader-event";
 import type { LoaderAssetManifestItem } from "../asset-registry/asset-manifest-schema";
+import { selectIconLoaderTransitionEffect } from "../loader-domain/icon-loader-transition-effect";
 import { createSeededRandom } from "./seeded-random";
 import type { SeededRandom } from "./seeded-random";
 import { pickPalette, pickTempo } from "./generation-shared";
@@ -30,13 +31,19 @@ export function generateIconLoaderScenario(seed: number, assetRegistry: AssetReg
     return asset.assetKind === "icon_resource";
   });
   const selectedAssets = pickNonRepeatingIconRound(random, iconAssets);
-  const events: IconLoaderEvent[] = selectedAssets.map((asset, index) => ({
-    kind: "pixel_assemble",
-    atMs: 500 + index * random.nextInt(900, 1300),
-    assetId: asset.id,
-    label: asset.label ?? asset.id,
-    burst: random.nextInt(12, 24),
-  }));
+  const events: IconLoaderEvent[] = selectedAssets.map((asset, index) => {
+    const atMs = 500 + index * random.nextInt(900, 1300);
+
+    return {
+      kind: "icon_transition",
+      atMs,
+      assetId: asset.id,
+      label: asset.label ?? asset.id,
+      burst: random.nextInt(12, 24),
+      durationMs: random.nextInt(1500, 2100),
+      effect: selectIconLoaderTransitionEffect(seed, asset.id, atMs),
+    };
+  });
 
   return {
     kind: "icon_loader",

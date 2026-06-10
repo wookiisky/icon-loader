@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { appRequestReducer } from "../../src/app/app-reducer";
 import { initialAppRequestState, resolveLoaderSeed, shouldPlayLoaderAnimation } from "../../src/app/app-state";
+import type { KeywordIconQueueItem } from "../../src/loader-domain/keyword-icon-queue";
+
+/** 构造 reducer 测试用的关键词 icon 队列项。 */
+function createKeywordIconQueueItem(index: number): KeywordIconQueueItem {
+  return {
+    id: `item-${index}`,
+    keyword: `keyword-${index}`,
+    assetId: `asset-${index}`,
+    label: `Asset ${index}`,
+    assetKind: "icon_resource",
+    path: `/asset-${index}.json`,
+    format: "pixel-json",
+    width: 64,
+    height: 64,
+    appendedAtMs: 100 + index,
+  };
+}
 
 describe("appRequestReducer", () => {
   it("拒绝空输入", () => {
@@ -106,5 +123,155 @@ describe("appRequestReducer", () => {
     expect(resolveLoaderSeed(initialAppRequestState, null)).toBeNull();
     expect(resolveLoaderSeed(initialAppRequestState, 202)).toBe(202);
     expect(resolveLoaderSeed(loadingState, 202)).toBe(101);
+  });
+
+  it("追加 thought 关键词 icon 队列并限制最多 10 个", () => {
+    let state = appRequestReducer(initialAppRequestState, {
+      kind: "submit",
+      requestId: "r1",
+      seed: 1,
+      nowMs: 100,
+      prompt: "你好",
+    });
+
+    for (let index = 0; index < 11; index += 1) {
+      state = appRequestReducer(state, {
+        kind: "thought_keyword_icon",
+        requestId: "r1",
+        item: createKeywordIconQueueItem(index),
+      });
+    }
+
+    expect(state.kind).toBe("loading");
+    if (state.kind === "loading") {
+      expect(state.keywordIconQueueState.items).toHaveLength(10);
+      expect(state.keywordIconQueueState.items.map((item) => item.id)).toEqual([
+        "item-1",
+        "item-2",
+        "item-3",
+        "item-4",
+        "item-5",
+        "item-6",
+        "item-7",
+        "item-8",
+        "item-9",
+        "item-10",
+      ]);
+    }
+  });
+
+  it("跳过连续重复关键词 icon 且忽略不匹配请求", () => {
+    const loadingState = appRequestReducer(initialAppRequestState, {
+      kind: "submit",
+      requestId: "r1",
+      seed: 1,
+      nowMs: 100,
+      prompt: "你好",
+    });
+    const firstState = appRequestReducer(loadingState, {
+      kind: "thought_keyword_icon",
+      requestId: "r1",
+      item: createKeywordIconQueueItem(1),
+    });
+    const duplicatedState = appRequestReducer(firstState, {
+      kind: "thought_keyword_icon",
+      requestId: "r1",
+      item: {
+        ...createKeywordIconQueueItem(2),
+        keyword: "keyword-1",
+      },
+    });
+    const staleState = appRequestReducer(duplicatedState, {
+      kind: "thought_keyword_icon",
+      requestId: "stale",
+      item: createKeywordIconQueueItem(3),
+    });
+
+    expect(staleState.kind).toBe("loading");
+    if (staleState.kind === "loading") {
+      expect(staleState.keywordIconQueueState.items.map((item) => item.id)).toEqual(["item-1"]);
+    }
+  });
+
+  it("当前 10 个内重复 icon 会跳过", () => {
+    const loadingState = appRequestReducer(initialAppRequestState, {
+      kind: "submit",
+      requestId: "r1",
+      seed: 1,
+      nowMs: 100,
+      prompt: "你好",
+    });
+    const firstState = appRequestReducer(loadingState, {
+      kind: "thought_keyword_icon",
+      requestId: "r1",
+      item: createKeywordIconQueueItem(1),
+    });
+    const duplicatedState = appRequestReducer(firstState, {
+      kind: "thought_keyword_icon",
+      requestId: "r1",
+      item: {
+        ...createKeywordIconQueueItem(2),
+        keyword: "keyword-new",
+        assetId: "asset-1",
+      },
+    });
+
+    expect(duplicatedState.kind).toBe("loading");
+    if (duplicatedState.kind === "loading") {
+      expect(duplicatedState.keywordIconQueueState.items.map((item) => item.id)).toEqual(["item-1"]);
+      expect(duplicatedState.keywordIconQueueState.assetAppearanceCounts.get("asset-1")).toBe(1);
+    }
+  });
+
+  it("同一 icon 在请求生命周期内最多成功进入两次", () => {
+    let state = appRequestReducer(initialAppRequestState, {
+      kind: "submit",
+      requestId: "r1",
+      seed: 1,
+      nowMs: 100,
+      prompt: "你好",
+    });
+
+    for (let index = 0; index < 11; index += 1) {
+      state = appRequestReducer(state, {
+        kind: "thought_keyword_icon",
+        requestId: "r1",
+        item: createKeywordIconQueueItem(index),
+      });
+    }
+
+    state = appRequestReducer(state, {
+      kind: "thought_keyword_icon",
+      requestId: "r1",
+      item: {
+        ...createKeywordIconQueueItem(100),
+        keyword: "keyword-second-asset-0",
+        assetId: "asset-0",
+      },
+    });
+
+    for (let index = 200; index < 210; index += 1) {
+      state = appRequestReducer(state, {
+        kind: "thought_keyword_icon",
+        requestId: "r1",
+        item: createKeywordIconQueueItem(index),
+      });
+    }
+
+    const thirdAttemptState = appRequestReducer(state, {
+      kind: "thought_keyword_icon",
+      requestId: "r1",
+      item: {
+        ...createKeywordIconQueueItem(300),
+        keyword: "keyword-third-asset-0",
+        assetId: "asset-0",
+      },
+    });
+
+    expect(thirdAttemptState.kind).toBe("loading");
+    if (thirdAttemptState.kind === "loading") {
+      expect(thirdAttemptState.keywordIconQueueState.items.map((item) => item.assetId)).not.toContain("asset-0");
+      expect(thirdAttemptState.keywordIconQueueState.assetAppearanceCounts.get("asset-0")).toBe(2);
+    }
   });
 });

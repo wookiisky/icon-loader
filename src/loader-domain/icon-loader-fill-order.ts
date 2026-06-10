@@ -10,6 +10,10 @@ export type IconLoaderFillOrderMode =
   | "edge_in"
   | "diagonal_down"
   | "diagonal_up"
+  | "spiral_in"
+  | "spiral_out"
+  | "wave_left"
+  | "wave_top"
   | "shuffle";
 
 /** Icon Loader填充顺序计算上下文。 */
@@ -27,6 +31,8 @@ export type IconLoaderFillOrderContext = {
     /** 纵向格子数。 */
     rows: number;
   };
+  /** 可选指定填充模式；不传时根据 seed 稳定选择。 */
+  orderMode?: IconLoaderFillOrderMode;
 };
 
 /** Icon Loader支持的填充顺序模式。 */
@@ -39,6 +45,10 @@ export const iconLoaderFillOrderModes: readonly IconLoaderFillOrderMode[] = [
   "edge_in",
   "diagonal_down",
   "diagonal_up",
+  "spiral_in",
+  "spiral_out",
+  "wave_left",
+  "wave_top",
   "shuffle",
 ] as const;
 
@@ -53,7 +63,7 @@ export function orderIconLoaderPoints<TPoint extends IconLoaderPoint>(
   points: readonly TPoint[],
   context: IconLoaderFillOrderContext,
 ): TPoint[] {
-  const mode = selectIconLoaderFillOrderMode(context);
+  const mode = context.orderMode ?? selectIconLoaderFillOrderMode(context);
   const copiedPoints = points.map((point) => ({ ...point })) as TPoint[];
 
   if (mode === "shuffle") {
@@ -122,7 +132,23 @@ function createPointOrderScore(
     return point.x + point.y;
   }
 
-  return point.x - point.y;
+  if (mode === "diagonal_up") {
+    return point.x - point.y;
+  }
+
+  if (mode === "spiral_in") {
+    return createSpiralScore(point, grid, "in");
+  }
+
+  if (mode === "spiral_out") {
+    return createSpiralScore(point, grid, "out");
+  }
+
+  if (mode === "wave_left") {
+    return point.x * grid.rows + createWaveOffset(point.y);
+  }
+
+  return point.y * grid.columns + createWaveOffset(point.x);
 }
 
 /** 按坐标提供稳定的排序兜底。 */
@@ -147,6 +173,29 @@ function shufflePoints<TPoint extends IconLoaderPoint>(points: TPoint[], seed: n
   }
 
   return points;
+}
+
+/** 计算螺旋填充顺序，角度决定同一半径内的旋转方向。 */
+function createSpiralScore(
+  point: IconLoaderPoint,
+  grid: IconLoaderFillOrderContext["grid"],
+  direction: "in" | "out",
+): number {
+  const centerX = (grid.columns - 1) / 2;
+  const centerY = (grid.rows - 1) / 2;
+  const dx = point.x - centerX;
+  const dy = point.y - centerY;
+  const distance = Math.abs(dx) + Math.abs(dy);
+  const radialScore = direction === "in" ? -distance : distance;
+  const angle = Math.atan2(dy, dx);
+  const normalizedAngle = angle < 0 ? angle + Math.PI * 2 : angle;
+
+  return radialScore * 1000 + Math.round(normalizedAngle * 100);
+}
+
+/** 生成波浪路径的次级偏移。 */
+function createWaveOffset(value: number): number {
+  return value % 2 === 0 ? value : -value;
 }
 
 /** 推进洗牌状态，避免每次取模都使用同一个哈希。 */

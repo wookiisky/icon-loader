@@ -1,4 +1,5 @@
 import type { AppAction, AppRequestState } from "./app-state";
+import { appendKeywordIconQueueItem, createEmptyKeywordIconQueueState } from "../loader-domain/keyword-icon-queue";
 
 /** 对用户输入做边界清洗，核心状态逻辑只接收清洗后的 prompt。 */
 function normalizePrompt(prompt: string): string {
@@ -33,6 +34,7 @@ export function appRequestReducer(state: AppRequestState, action: AppAction): Ap
       seed: action.seed,
       startedAtMs: action.nowMs,
       streamedText: "",
+      keywordIconQueueState: createEmptyKeywordIconQueueState(),
     };
   }
 
@@ -44,6 +46,17 @@ export function appRequestReducer(state: AppRequestState, action: AppAction): Ap
     return {
       ...state,
       streamedText: `${state.streamedText}${action.text}`,
+    };
+  }
+
+  if (action.kind === "thought_keyword_icon") {
+    if (state.kind !== "loading" || state.requestId !== action.requestId) {
+      return state;
+    }
+
+    return {
+      ...state,
+      keywordIconQueueState: appendKeywordIconQueueItem(state.keywordIconQueueState, action.item),
     };
   }
 

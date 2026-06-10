@@ -1,7 +1,16 @@
+import type { KeywordIconQueueItem, KeywordIconQueueState } from "../loader-domain/keyword-icon-queue";
+
 /** 页面请求状态，只表达用户提交到回复完成的核心流程。 */
 export type AppRequestState =
   | { kind: "idle" }
-  | { kind: "loading"; requestId: string; seed: number; startedAtMs: number; streamedText: string }
+  | {
+      kind: "loading";
+      requestId: string;
+      seed: number;
+      startedAtMs: number;
+      streamedText: string;
+      keywordIconQueueState: KeywordIconQueueState;
+    }
   | { kind: "success"; requestId: string; completedText: string; completedAtMs: number }
   | { kind: "error"; requestId: string | null; message: string; causeKind: AppErrorKind };
 
@@ -18,6 +27,7 @@ export type AppErrorKind =
 export type AppAction =
   | { kind: "submit"; requestId: string; seed: number; nowMs: number; prompt: string }
   | { kind: "stream_chunk"; requestId: string; text: string }
+  | { kind: "thought_keyword_icon"; requestId: string; item: KeywordIconQueueItem }
   | { kind: "stream_done"; requestId: string; nowMs: number }
   | { kind: "fail"; requestId: string | null; message: string; causeKind: AppErrorKind };
 

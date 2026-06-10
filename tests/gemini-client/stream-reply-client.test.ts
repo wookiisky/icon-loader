@@ -17,7 +17,7 @@ describe("streamReplyFromProxy", () => {
       vi.fn(async () => {
         return new Response(
           createStreamFromText(
-            '{"kind":"chunk","text":"你好"}\n{"kind":"chunk","text":"世界"}\n{"kind":"done"}\n',
+            '{"kind":"chunk","text":"你好"}\n{"kind":"thought_keyword","keyword":"database"}\n{"kind":"chunk","text":"世界"}\n{"kind":"done"}\n',
           ),
           { status: 200 },
         );
@@ -31,8 +31,31 @@ describe("streamReplyFromProxy", () => {
 
     expect(events).toEqual([
       { kind: "chunk", text: "你好" },
+      { kind: "thought_keyword", keyword: "database" },
       { kind: "chunk", text: "世界" },
       { kind: "done" },
+    ]);
+  });
+
+  it("非法 thought keyword 事件会触发流中断错误", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(createStreamFromText('{"kind":"thought_keyword","keyword":""}\n'), { status: 200 });
+      }),
+    );
+
+    const events = [];
+    for await (const event of streamReplyFromProxy("你好")) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        kind: "error",
+        message: "Gemini 流式回复中断，请稍后重试。",
+        causeKind: "gemini_stream_interrupted",
+      },
     ]);
   });
 

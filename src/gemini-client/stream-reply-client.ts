@@ -12,6 +12,13 @@ function parseStreamReplyEvent(line: string): StreamReplyEvent {
     return { kind: "chunk", text: event.text };
   }
 
+  if (event.kind === "thought_keyword" && typeof event.keyword === "string") {
+    const keyword = event.keyword.trim();
+    if (keyword.length > 0 && keyword.length <= 32) {
+      return { kind: "thought_keyword", keyword };
+    }
+  }
+
   if (event.kind === "done") {
     return { kind: "done" };
   }

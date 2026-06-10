@@ -1,7 +1,6 @@
 import { Application, Container, Graphics, Text, Ticker } from "pixi.js";
 import { iconLoaderResourceSchema } from "../asset-registry/icon-loader-resource-schema";
 import type { LoaderAssetRef } from "../loader-domain/loader-config";
-import { orderIconLoaderPoints } from "../loader-domain/icon-loader-fill-order";
 import {
   decodeIconLoaderResource,
   iconLoaderDisplayGrid,
@@ -12,6 +11,8 @@ import { createIconLoaderRound } from "../loader-domain/icon-loader-round-order"
 import type { IconLoaderRound } from "../loader-domain/icon-loader-round-order";
 import type { LoaderScenario } from "../loader-domain/loader-config";
 import type { IconLoaderEvent } from "../loader-domain/loader-event";
+import { createIconLoaderTransitionFrame } from "../loader-domain/icon-loader-transition-frame";
+import type { IconLoaderFramePoint } from "../loader-domain/icon-loader-transition-frame";
 import type { LoaderRendererHandle } from "./pixi-loader-stage";
 
 const animationCycleMs = 1800;
@@ -28,15 +29,17 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
   const title = new Text({
     text: "Icon Loader",
     style: {
-      fontFamily: "Georgia, serif",
+      fontFamily: "Inter, system-ui, sans-serif",
       fontSize: 14,
-      fill: "#f8f4e3",
+      fontWeight: "700",
+      fill: "#151822",
     },
   });
   let elapsedMs = 0;
   let cachedRoundIndex = -1;
   let cachedRound: IconLoaderRound | null = null;
-  const events = scenario.events.filter((event): event is IconLoaderEvent => event.kind === "pixel_assemble");
+  let lastRenderedAssetId: string | undefined;
+  const events = scenario.events.filter((event): event is IconLoaderEvent => event.kind === "icon_transition");
   const assetById = new Map(scenario.assets.map((asset) => [asset.id, asset]));
   const patternByAssetId = new Map<string, IconLoaderResourceLoadState>();
 
@@ -54,7 +57,9 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
 
     if (cachedRound === null || cachedRoundIndex !== roundIndex) {
       cachedRoundIndex = roundIndex;
-      cachedRound = createIconLoaderRound(events, scenario.seed, roundIndex);
+      cachedRound = createIconLoaderRound(events, scenario.seed, roundIndex, {
+        previousLastAssetId: lastRenderedAssetId,
+      });
     }
 
     return {
@@ -97,13 +102,7 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
 
   function drawBackground(): void {
     pixels.clear();
-    pixels.rect(0, 0, app.screen.width, app.screen.height).fill({ color: "#151319" });
-    for (let index = 0; index < 36; index += 1) {
-      const drift = Math.sin(elapsedMs / 210 + index) * 8;
-      const y = ((elapsedMs / 12 + index * 17) % (app.screen.height + 40)) - 20;
-      const x = (index * 31 + drift) % app.screen.width;
-      pixels.rect(x, y, 5, 5).fill({ color: scenario.palette[index % scenario.palette.length], alpha: 0.24 });
-    }
+    pixels.rect(0, 0, app.screen.width, app.screen.height).fill({ color: "#f8fafc" });
   }
 
   function drawFrame(ticker: Ticker): void {
@@ -127,7 +126,7 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
       ensurePatternLoaded(asset);
       const loadState = patternByAssetId.get(asset.id);
       if (loadState === undefined || loadState.kind === "loading") {
-        title.text = `Icon Loader · ${event.label}`;
+        title.text = "Icon Loader";
         title.x = 14;
         title.y = 12;
         return;
@@ -149,37 +148,70 @@ export function createIconLoaderRenderer(app: Application, scenario: LoaderScena
       const gridHeight = grid.rows * tileSize;
       const originX = app.screen.width / 2 - gridWidth / 2;
       const originY = app.screen.height / 2 - gridHeight / 2 + 8;
-      const points = orderIconLoaderPoints(loadState.points, {
+      const phase = (elapsedMs % animationCycleMs) / animationCycleMs;
+      const pulseAlpha = 0.78 + Math.sin(phase * Math.PI) * Math.min(0.2, event.burst / 120);
+      const framePoints = createIconLoaderTransitionFrame({
+        points: loadState.points,
+        effect: event.effect,
+        progress: phase,
         seed: active.roundSeed,
         patternId: event.assetId,
         atMs: event.atMs,
         grid,
+        burst: event.burst,
+        palette: scenario.palette,
       });
-      const phase = (elapsedMs % animationCycleMs) / animationCycleMs;
-      const visiblePointCount = Math.ceil(points.length * Math.min(1, phase * 1.35));
-      const pulseAlpha = 0.78 + Math.sin(phase * Math.PI) * Math.min(0.2, event.burst / 120);
 
-      points.slice(0, visiblePointCount).forEach((point) => {
-        const x = originX + point.x * tileSize;
-        const y = originY + point.y * tileSize;
-
-        pixels.rect(x + tileGap, y + tileGap, tileSize - tileGap, tileSize - tileGap).fill({
-          color: "#06070a",
-          alpha: 0.22,
-        });
-        pixels.rect(x, y, tileSize - tileGap, tileSize - tileGap).fill({
-          color: point.color,
-          alpha: Math.min(1, point.alpha * pulseAlpha),
+      framePoints.forEach((point) => {
+        drawFramePoint(point, {
+          originX,
+          originY,
+          tileSize,
+          tileGap,
+          pulseAlpha,
         });
       });
 
-      title.text = `Icon Loader · ${event.label}`;
+      lastRenderedAssetId = event.assetId;
+      title.text = "Icon Loader";
     } else {
       title.text = events.length === 0 ? "Icon Loader · 等待素材" : "Icon Loader";
     }
 
     title.x = 14;
     title.y = 12;
+  }
+
+  function drawFramePoint(
+    point: IconLoaderFramePoint,
+    options: {
+      originX: number;
+      originY: number;
+      tileSize: number;
+      tileGap: number;
+      pulseAlpha: number;
+    },
+  ): void {
+    const tileWidth = Math.max(1, options.tileSize - options.tileGap);
+    const x = options.originX + point.drawX * options.tileSize;
+    const y = options.originY + point.drawY * options.tileSize;
+
+    if (point.trailAlpha > 0 && point.trailFromX !== undefined && point.trailFromY !== undefined) {
+      const trailX = options.originX + point.trailFromX * options.tileSize;
+      const trailY = options.originY + point.trailFromY * options.tileSize;
+      pixels.moveTo(trailX + tileWidth / 2, trailY + tileWidth / 2);
+      pixels.lineTo(x + tileWidth / 2, y + tileWidth / 2);
+      pixels.stroke({ color: point.color, alpha: point.trailAlpha, width: Math.max(1, options.tileSize / 2) });
+    }
+
+    pixels.rect(x + options.tileGap, y + options.tileGap, tileWidth, tileWidth).fill({
+      color: "#06070a",
+      alpha: 0.18,
+    });
+    pixels.rect(x, y, tileWidth, tileWidth).fill({
+      color: point.color,
+      alpha: Math.min(1, point.alpha * options.pulseAlpha),
+    });
   }
 
   app.ticker.add(drawFrame);

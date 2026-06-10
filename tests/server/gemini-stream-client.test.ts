@@ -12,10 +12,27 @@ vi.mock("@google/genai", () => ({
   },
 }));
 
-import { readGeminiServerConfig, streamGeminiText } from "../../server/gemini-stream-client";
+import {
+  extractVisibleThoughtTexts,
+  readGeminiServerConfig,
+  streamGeminiEvents,
+} from "../../server/gemini-stream-client";
 
-async function* createFakeGeminiStream(): AsyncGenerator<{ text?: string }> {
-  yield { text: "第一段" };
+async function* createFakeGeminiStream(): AsyncGenerator<{ text?: string; candidates?: unknown[] }> {
+  yield {
+    candidates: [
+      {
+        content: {
+          parts: [
+            { thought: true, text: "Search database schema. " },
+            { thought: true, text: "Build query plan. ", thoughtSignature: "opaque" },
+            { text: "不应进入 thought" },
+          ],
+        },
+      },
+    ],
+  };
+  yield { text: "第一段", candidates: [] };
   yield { text: "" };
   yield {};
   yield { text: "第二段" };
@@ -71,7 +88,7 @@ describe("readGeminiServerConfig", () => {
   });
 });
 
-describe("streamGeminiText", () => {
+describe("streamGeminiEvents", () => {
   beforeEach(() => {
     geminiMocks.generateContentStream.mockReset();
     geminiMocks.GoogleGenAI.mockReset();
@@ -85,13 +102,13 @@ describe("streamGeminiText", () => {
   it("以流式方式请求 Gemini 并显式开启 high thinking", async () => {
     geminiMocks.generateContentStream.mockResolvedValue(createFakeGeminiStream());
 
-    const chunks: string[] = [];
-    for await (const text of streamGeminiText("你好", {
+    const events = [];
+    for await (const event of streamGeminiEvents("你好", {
       apiKey: "key",
       model: "gemini-3.1-pro-preview",
       thinkingLevel: "high",
     })) {
-      chunks.push(text);
+      events.push(event);
     }
 
     expect(geminiMocks.GoogleGenAI).toHaveBeenCalledWith({ apiKey: "key" });
@@ -101,9 +118,33 @@ describe("streamGeminiText", () => {
       config: {
         thinkingConfig: {
           thinkingLevel: "HIGH",
+          includeThoughts: true,
         },
       },
     });
-    expect(chunks).toEqual(["第一段", "第二段"]);
+    expect(events).toEqual([
+      { kind: "thought_text", text: "Search database schema. " },
+      { kind: "thought_text", text: "Build query plan. " },
+      { kind: "text_chunk", text: "第一段" },
+      { kind: "text_chunk", text: "第二段" },
+    ]);
+  });
+
+  it("只提取可见 thought 文本，不读取 thoughtSignature", () => {
+    const thoughtTexts = extractVisibleThoughtTexts({
+      candidates: [
+        {
+          content: {
+            parts: [
+              { thought: true, text: "visible thought", thoughtSignature: "opaque" },
+              { thought: true, thoughtSignature: "opaque-only" },
+              { text: "answer" },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(thoughtTexts).toEqual(["visible thought"]);
   });
 });

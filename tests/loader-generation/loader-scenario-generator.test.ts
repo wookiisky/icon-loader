@@ -55,8 +55,8 @@ describe("loader scenario generators", () => {
     });
     const scenario = generateIconLoaderScenario(18, registry);
     const events = scenario.events.map((event) => {
-      if (event.kind !== "pixel_assemble") {
-        throw new Error("测试只接收 Icon Loader 组装事件。");
+      if (event.kind !== "icon_transition") {
+        throw new Error("测试只接收 Icon Loader 切换事件。");
       }
       return event;
     });
@@ -68,5 +68,7 @@ describe("loader scenario generators", () => {
     expect(uniqueAssetIds.size).toBe(assetIds.length);
     expect(scenario.assets).toHaveLength(2);
     expect(scenario.assets[0]?.width).toBe(iconLoaderResourceGrid.columns);
+    expect(events.every((event) => event.durationMs > 0)).toBe(true);
+    expect(events.every((event) => event.effect.kind.length > 0)).toBe(true);
   });
 });

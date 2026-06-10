@@ -20,9 +20,11 @@ export function PromptForm({ disabled, onSubmit }: PromptFormProps) {
         aria-label="输入问题"
         className="prompt-input"
         disabled={disabled}
+        id="prompt"
+        name="prompt"
         onChange={(event) => setPrompt(event.target.value)}
-        placeholder="输入一个问题，观察等待时的 Loader 动画..."
-        rows={5}
+        placeholder="输入问题，观察等待动画..."
+        rows={3}
         value={prompt}
       />
       <button className="submit-button" disabled={disabled} type="submit">

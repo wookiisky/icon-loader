@@ -4,9 +4,9 @@
 
 本项目的动画核心改为：
 
-**icon 资源构建 + seed 配置生成 + PixiJS 本地渲染**
+**icon 资源构建 + seed 切换配置生成 + PixiJS 本地渲染**
 
-当前只保留原像素组装 Loader 的逻辑，不再保留旧的非 Icon Loader等动画。
+当前只保留 Icon Loader，不再保留旧的非 Icon Loader 动画。Icon Loader 的播放核心是图标之间的切换效果，不表达真实进度。
 
 ## 2. 目标与边界
 
@@ -46,7 +46,8 @@
    - 资产注册表读取并校验 manifest。
    - 场景生成器从资源池生成播放事件。
    - PixiJS 渲染器加载资源 JSON。
-   - 渲染器按 seed 选择填充顺序并绘制 icon。
+   - 场景生成器按 seed 选择目标图标和切换效果。
+   - 渲染器消费纯帧计算结果并绘制 icon。
    - Gemini 流式回复结束后，动画停止或回到等待态。
 
 ## 4. 模块边界
@@ -60,7 +61,9 @@
 - `loader-config.ts`：运行时场景配置契约。
 - `icon-loader-resource.ts`：Icon Loader 资源格式和解码函数。
 - `icon-loader-fill-order.ts`：填充顺序选择和排序。
-- `icon-loader-round-order.ts`：单轮资源播放顺序。
+- `icon-loader-transition-effect.ts`：切换效果契约和稳定选择。
+- `icon-loader-transition-frame.ts`：切换效果的纯帧计算。
+- `icon-loader-round-order.ts`：单轮资源播放顺序，并在多 icon 情况下避免跨轮边界相邻重复。
 
 Domain 层不得依赖 PixiJS、fetch、Gemini 协议、服务端环境变量或浏览器 API。
 
@@ -80,7 +83,8 @@ Domain 层不得依赖 PixiJS、fetch、Gemini 协议、服务端环境变量或
 
 - 从资产注册表读取 `icon_loader` 的 `icon_resource`。
 - 对资源池做不放回抽取。
-- 生成 `pixel_assemble` 事件。
+- 生成 `icon_transition` 事件。
+- 为每个事件选择稳定随机的切换效果。
 - 生成 palette 和 tempo。
 
 该层不读取 Gemini 文本，不做网络请求，不触碰 DOM。
@@ -92,7 +96,7 @@ Domain 层不得依赖 PixiJS、fetch、Gemini 协议、服务端环境变量或
 - 创建和销毁 PixiJS 应用。
 - 加载资源 JSON。
 - 使用 schema 清洗资源。
-- 按 Domain 输出的排序结果绘制像素。
+- 按 Domain 输出的切换帧绘制像素。
 - 资源加载失败时只影响 Loader 展示，不影响 Gemini 回复。
 
 ### 4.5 `server/` 和 `src/gemini-client/`
@@ -160,20 +164,34 @@ Icon Loader 资源条目：
 }
 ```
 
-## 7. 运行时算法
+## 7. 切换效果模型
 
-当前 Loader 算法保持原像素组装逻辑：
+切换效果分为通用装配和特殊效果两类：
+
+1. 通用装配效果使用 `assembly` 建模。
+   - `groupMode`：控制点、列、簇、环段等聚合方式。
+   - `orderMode`：控制左右、上下、中心、边缘、对角、随机、螺旋、波浪等方向路径。
+   - `originMode`：控制目标原位、顶部外侧、随机散点、环形轨道等起点。
+   - `motionMode`：控制直接显现、下落、飞入、环绕等出现方式。
+   - `settleMode` 和 `trailMode`：控制落位反馈和轨迹。
+2. 特殊效果独立建模。
+   - `column_slot`：每列随机滚动，最后停到目标图标对应列。
+   - `radar_reveal`：扫描遮罩逐步显影目标图标。
+3. 旧填充效果保留为 `assembly` 的一组参数，不再作为独立事件类型。
+
+## 8. 运行时算法
 
 1. `generateIconLoaderScenario(seed, registry)` 从资源池读取全部可用 icon。
-2. 对资源池做不放回抽取，形成一轮播放事件。
+2. 对资源池做不放回抽取，形成一轮 `icon_transition` 事件。
 3. 渲染器按时间确定当前事件。
 4. 渲染器加载 `64 * 64` 资源后转换为 `32 * 32` 展示点阵。
 5. 每轮使用 `createIconLoaderRound` 派生 round seed。
-6. 每个 icon 使用 `orderIconLoaderPoints` 选择填充顺序。
-7. 已显示像素数随当前动画周期递增。
-8. 一轮播放完后重新洗牌。
+6. 每个事件使用 `createIconLoaderTransitionFrame` 计算当前帧点位。
+7. 通用装配内部按需使用 `orderIconLoaderPoints` 排序。
+8. PixiJS 渲染器只绘制当前帧点位、轨迹和标题。
+9. 一轮播放完后重新洗牌，多 icon 情况下下一轮首项避开上一轮末项；单 icon 或同资产 ID 输入无法物理避免相邻重复。
 
-## 8. 错误策略
+## 9. 错误策略
 
 1. manifest 非法：回退为空资产表。
 2. 资源 JSON 加载失败：当前 Loader 显示“素材不可用”。
@@ -181,7 +199,7 @@ Icon Loader 资源条目：
 4. Gemini 请求失败：页面进入 error 状态，Loader 按状态停止。
 5. Loader 渲染失败不得影响回复流读取。
 
-## 9. 测试策略
+## 10. 测试策略
 
 默认测试覆盖：
 
@@ -190,15 +208,16 @@ Icon Loader 资源条目：
 3. 资产 manifest 校验与查询。
 4. Icon Loader 场景生成。
 5. Icon Loader 资源解码和展示网格转换。
-6. 填充顺序稳定性和完整性。
-7. 单轮资源顺序不重复。
-8. 构建脚本能把 SVG 转为资源 JSON。
+6. 填充顺序和切换效果选择的稳定性。
+7. 通用装配、列老虎机和雷达扫描的纯帧计算。
+8. 单轮资源顺序不重复，多 icon 情况下跨轮边界不相邻重复。
+9. 构建脚本能把 SVG 转为资源 JSON。
 
-## 10. 后续扩展原则
+## 11. 后续扩展原则
 
 新增动画方式时，优先复用 `IconLoaderResource`：
 
-1. 先扩展显式 `IconLoaderEvent` 或新增强类型事件。
+1. 常规点阵动效优先扩展 `assembly` 参数。
 2. 再扩展 generation。
 3. 最后扩展 renderer。
 4. 不把 Gemini 原始返回结构直接放入 Domain。

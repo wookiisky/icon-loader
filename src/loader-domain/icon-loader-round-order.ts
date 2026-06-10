@@ -8,18 +8,26 @@ export type IconLoaderRound = {
   events: IconLoaderEvent[];
 };
 
+/** Icon Loader 单轮顺序生成选项。 */
+export type IconLoaderRoundOrderOptions = {
+  /** 上一轮实际播放的最后一个资产 ID，用于避免跨轮边界相邻重复。 */
+  previousLastAssetId?: string;
+};
+
 /** 生成Icon Loader某一轮的稳定随机顺序。 */
 export function createIconLoaderRound(
   events: readonly IconLoaderEvent[],
   scenarioSeed: number,
   roundIndex: number,
+  options: IconLoaderRoundOrderOptions = {},
 ): IconLoaderRound {
   const roundSeed = createRoundSeed(scenarioSeed, roundIndex);
   const copiedEvents = events.map((event) => ({ ...event }));
+  const shuffledEvents = shuffleEvents(copiedEvents, roundSeed);
 
   return {
     seed: roundSeed,
-    events: shuffleEvents(copiedEvents, roundSeed),
+    events: moveDifferentEventToFirst(shuffledEvents, options.previousLastAssetId),
   };
 }
 
@@ -52,6 +60,27 @@ function shuffleEvents(events: IconLoaderEvent[], seed: number): IconLoaderEvent
     events[swapIndex] = currentEvent;
   }
 
+  return events;
+}
+
+/** 将不同于上一轮末项的事件移到首位，避免跨轮边界相邻重复。 */
+function moveDifferentEventToFirst(events: IconLoaderEvent[], previousLastAssetId: string | undefined): IconLoaderEvent[] {
+  if (previousLastAssetId === undefined || events.length <= 1) {
+    return events;
+  }
+
+  const firstEvent = events[0];
+  if (firstEvent === undefined || firstEvent.assetId !== previousLastAssetId) {
+    return events;
+  }
+
+  const replacementIndex = events.findIndex((event) => event.assetId !== previousLastAssetId);
+  if (replacementIndex <= 0) {
+    return events;
+  }
+
+  events[0] = events[replacementIndex];
+  events[replacementIndex] = firstEvent;
   return events;
 }
 
