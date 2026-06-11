@@ -69,24 +69,31 @@ export function createNextQueueVisualItems(
   queue: readonly KeywordIconQueueItem[],
   nowMs: number,
 ): QueueVisualItem[] {
+  const visibleQueue = queue.slice(-keywordIconQueueSlotCount);
+  if (visibleQueue.length === 0) {
+    return [];
+  }
+
   const activeItems = currentVisualItems.filter((visualItem) => !visualItem.removing);
   const previousById = new Map(activeItems.map((visualItem) => [visualItem.item.id, visualItem]));
   const nextVisualItems: QueueVisualItem[] = [];
+  const startSlot = resolveRightAlignedStartSlot(visibleQueue.length);
 
-  queue.forEach((item, index) => {
+  visibleQueue.forEach((item, index) => {
+    const targetSlot = startSlot + index;
     const previousItem = previousById.get(item.id);
     if (previousItem === undefined) {
       nextVisualItems.push({
         item,
         fromSlot: keywordIconQueueSlotCount,
-        toSlot: index,
+        toSlot: targetSlot,
         changedAtMs: nowMs,
         removing: false,
       });
       return;
     }
 
-    if (previousItem.toSlot === index) {
+    if (previousItem.toSlot === targetSlot) {
       nextVisualItems.push(previousItem);
       return;
     }
@@ -94,13 +101,18 @@ export function createNextQueueVisualItems(
     nextVisualItems.push({
       item,
       fromSlot: resolveCurrentSlot(previousItem, nowMs),
-      toSlot: index,
+      toSlot: targetSlot,
       changedAtMs: nowMs,
       removing: false,
     });
   });
 
   return nextVisualItems;
+}
+
+/** 计算当前可见队列的右对齐起始槽位。 */
+function resolveRightAlignedStartSlot(visibleQueueLength: number): number {
+  return keywordIconQueueSlotCount - visibleQueueLength;
 }
 
 /** 计算 5 槽 16x16 队列在画布中的单行布局。 */

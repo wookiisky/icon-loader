@@ -38,6 +38,10 @@ function createVisualItem(item: KeywordIconQueueItem, slot: number): QueueVisual
 }
 
 describe("createNextQueueVisualItems", () => {
+  it("空队列返回空可视项", () => {
+    expect(createNextQueueVisualItems([], [], 100)).toEqual([]);
+  });
+
   it("同一 assetId 新项进入时不保留旧项退场动画", () => {
     const oldItem = createQueueItem(1, "asset-shared");
     const newItem = createQueueItem(2, "asset-shared");
@@ -61,9 +65,9 @@ describe("createNextQueueVisualItems", () => {
   it("同一队列重复设置时保留已有可视项动画时间", () => {
     const item = createQueueItem(1, "asset-stable");
     const visualItem = {
-      ...createVisualItem(item, 0),
+      ...createVisualItem(item, 4),
       fromSlot: 5,
-      toSlot: 0,
+      toSlot: 4,
       changedAtMs: 100,
     };
     const nextVisualItems = createNextQueueVisualItems([visualItem], [item], 240);
@@ -73,12 +77,47 @@ describe("createNextQueueVisualItems", () => {
     expect(nextVisualItems[0].changedAtMs).toBe(100);
   });
 
-  it("新 icon 从 5 槽布局右侧进入", () => {
+  it("单个新 icon 从 5 槽布局右侧进入最右侧槽位", () => {
     const item = createQueueItem(1, "asset-new");
     const nextVisualItems = createNextQueueVisualItems([], [item], 100);
 
     expect(nextVisualItems[0].fromSlot).toBe(keywordIconQueueSlotCount);
-    expect(nextVisualItems[0].toSlot).toBe(0);
+    expect(nextVisualItems[0].toSlot).toBe(4);
+  });
+
+  it("追加第二个 icon 时旧项左移，新项进入最右侧", () => {
+    const firstItem = createQueueItem(1, "asset-1");
+    const secondItem = createQueueItem(2, "asset-2");
+    const currentVisualItems = [createVisualItem(firstItem, 4)];
+    const nextVisualItems = createNextQueueVisualItems(currentVisualItems, [firstItem, secondItem], 100);
+
+    expect(nextVisualItems).toHaveLength(2);
+    expect(nextVisualItems[0]).toMatchObject({
+      item: firstItem,
+      fromSlot: 4,
+      toSlot: 3,
+      changedAtMs: 100,
+    });
+    expect(nextVisualItems[1]).toMatchObject({
+      item: secondItem,
+      fromSlot: 5,
+      toSlot: 4,
+      changedAtMs: 100,
+    });
+  });
+
+  it("从 4 个追加到 5 个时所有旧项左移并补满最右槽位", () => {
+    const oldItems = Array.from({ length: 4 }, (_, index) => createQueueItem(index));
+    const nextItems = [...oldItems, createQueueItem(4)];
+    const currentVisualItems = oldItems.map((item, index) => createVisualItem(item, index + 1));
+    const nextVisualItems = createNextQueueVisualItems(currentVisualItems, nextItems, 100);
+
+    expect(nextVisualItems.map((visualItem) => visualItem.toSlot)).toEqual([0, 1, 2, 3, 4]);
+    expect(nextVisualItems[4]).toMatchObject({
+      item: nextItems[4],
+      fromSlot: 5,
+      toSlot: 4,
+    });
   });
 
   it("满 5 个后追加新队列时不保留被挤出的旧项", () => {
@@ -95,7 +134,29 @@ describe("createNextQueueVisualItems", () => {
       "item-4",
       "item-5",
     ]);
+    expect(nextVisualItems.map((visualItem) => [visualItem.item.id, visualItem.fromSlot, visualItem.toSlot])).toEqual([
+      ["item-1", 1, 0],
+      ["item-2", 2, 1],
+      ["item-3", 3, 2],
+      ["item-4", 4, 3],
+      ["item-5", 5, 4],
+    ]);
     expect(nextVisualItems.some((visualItem) => visualItem.item.id === "item-0")).toBe(false);
+  });
+
+  it("即使传入超过 5 个也只保留最新 5 个可视项", () => {
+    const nextItems = Array.from({ length: 6 }, (_, index) => createQueueItem(index));
+    const nextVisualItems = createNextQueueVisualItems([], nextItems, 100);
+
+    expect(nextVisualItems).toHaveLength(5);
+    expect(nextVisualItems.map((visualItem) => visualItem.item.id)).toEqual([
+      "item-1",
+      "item-2",
+      "item-3",
+      "item-4",
+      "item-5",
+    ]);
+    expect(nextVisualItems.map((visualItem) => visualItem.toSlot)).toEqual([0, 1, 2, 3, 4]);
   });
 });
 

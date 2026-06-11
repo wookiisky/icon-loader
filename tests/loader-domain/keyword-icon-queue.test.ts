@@ -78,7 +78,7 @@ describe("appendKeywordIconQueueItem", () => {
     expect(new Set(nextState.items.map((item) => item.assetId)).size).toBe(10);
   });
 
-  it("asset 被挤出最近 10 个后允许第二次进入", () => {
+  it("asset 被挤出最近 10 个后仍禁止再次进入", () => {
     const firstRoundState = Array.from({ length: 11 }, (_, index) => createQueueItem(index)).reduce(
       appendKeywordIconQueueItem,
       createEmptyKeywordIconQueueState(),
@@ -89,34 +89,26 @@ describe("appendKeywordIconQueueItem", () => {
     });
 
     expect(firstRoundState.items.map((item) => item.assetId)).not.toContain("asset-0");
-    expect(nextState.items.at(-1)?.assetId).toBe("asset-0");
-    expect(nextState.assetAppearanceCounts.get("asset-0")).toBe(2);
+    expect(nextState).toBe(firstRoundState);
+    expect(nextState.appearedAssetIds.has("asset-0")).toBe(true);
   });
 
-  it("同一 asset 在请求生命周期内第三次出现时跳过", () => {
+  it("同一 asset 在请求生命周期内第二次出现时跳过", () => {
     const firstRoundState = Array.from({ length: 11 }, (_, index) => createQueueItem(index)).reduce(
       appendKeywordIconQueueItem,
       createEmptyKeywordIconQueueState(),
     );
-    const secondAppearanceState = appendKeywordIconQueueItem(firstRoundState, {
+    const nextState = appendKeywordIconQueueItem(firstRoundState, {
       ...createQueueItem(100, "asset-0"),
       keyword: "keyword-second-asset-0",
     });
-    const stateWithoutAssetZero = Array.from({ length: 10 }, (_, index) => createQueueItem(200 + index)).reduce(
-      appendKeywordIconQueueItem,
-      secondAppearanceState,
-    );
-    const nextState = appendKeywordIconQueueItem(stateWithoutAssetZero, {
-      ...createQueueItem(300, "asset-0"),
-      keyword: "keyword-third-asset-0",
-    });
 
-    expect(stateWithoutAssetZero.items.map((item) => item.assetId)).not.toContain("asset-0");
-    expect(nextState).toBe(stateWithoutAssetZero);
-    expect(nextState.assetAppearanceCounts.get("asset-0")).toBe(2);
+    expect(firstRoundState.items.map((item) => item.assetId)).not.toContain("asset-0");
+    expect(nextState).toBe(firstRoundState);
+    expect(nextState.appearedAssetIds.has("asset-0")).toBe(true);
   });
 
-  it("被跳过的重复 asset 不增加生命周期计数", () => {
+  it("被跳过的重复 asset 不改变生命周期集合", () => {
     const state = appendKeywordIconQueueItem(createEmptyKeywordIconQueueState(), createQueueItem(1, "asset-shared"));
     const nextState = appendKeywordIconQueueItem(state, {
       ...createQueueItem(2, "asset-shared"),
@@ -124,6 +116,22 @@ describe("appendKeywordIconQueueItem", () => {
     });
 
     expect(nextState).toBe(state);
-    expect(nextState.assetAppearanceCounts.get("asset-shared")).toBe(1);
+    expect(nextState.appearedAssetIds.has("asset-shared")).toBe(true);
+    expect(nextState.appearedAssetIds.size).toBe(1);
+  });
+
+  it("新队列状态不继承旧请求的已出现 icon", () => {
+    const previousRequestState = appendKeywordIconQueueItem(
+      createEmptyKeywordIconQueueState(),
+      createQueueItem(1, "asset-shared"),
+    );
+    const nextRequestState = appendKeywordIconQueueItem(
+      createEmptyKeywordIconQueueState(),
+      createQueueItem(2, "asset-shared"),
+    );
+
+    expect(previousRequestState.appearedAssetIds.has("asset-shared")).toBe(true);
+    expect(nextRequestState.items.map((item) => item.id)).toEqual(["item-2"]);
+    expect(nextRequestState.appearedAssetIds.has("asset-shared")).toBe(true);
   });
 });

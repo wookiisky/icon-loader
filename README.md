@@ -24,7 +24,7 @@ Icon Loader 是一个桌面 Web 演示项目，用于把下载到本地的 icon 
 5. 页面固定展示 3 个同类 Icon Loader；每次请求或手动开始都会生成基础 seed，三个展示槽位再派生不同 seed，因此初始动画不同。
 6. Icon Loader 每轮播放完整 icon 资源池，单轮内不重复；播完一轮后派生新轮次 seed 并重新洗牌，多 icon 情况下会避免跨轮边界相邻重复。
 7. 每次切换会稳定选择一种效果：通用装配、列老虎机或雷达显影；切换完成后停留 0.5 秒再进入下一个 icon。
-8. Thinking Icon Queue 只在 Gemini 请求进行中展示。收到 thought keyword 后 append，逻辑队列最多保留最近 10 个用于去重；最近 10 个内同一 icon 只能出现一次，重复匹配会跳过；界面只显示最新 5 个并保持单行 5 槽；同一请求生命周期内同一 icon 最多成功出现 2 次，第 3 次起跳过。
+8. Thinking Icon Queue 只在 Gemini 请求进行中展示。收到 thought keyword 后 append，逻辑队列最多保留最近 10 个并沿用现有去重规则；界面只显示最新 5 个并保持单行 5 槽，未满 5 个时新 icon 从右侧 append、已有 icon 向左挤，满 5 个后继续 append 时最左侧旧 icon 被挤出。
 9. 如果资产清单仍在加载，收到的 thought keyword 会短暂缓存，清单 ready 后再匹配 icon。
 10. 如果模型或 SDK 没有返回可见 thought 文本，Thinking Icon Queue 保持等待态，主回复链路不受影响。
 11. 如果关键词无法匹配到 icon，会使用稳定兜底 icon；没有可用兜底资产时跳过该关键词。
@@ -194,7 +194,7 @@ pnpm vercel:prod
 
 Icon Loader 资源格式、展示网格配置、切换效果和轮次顺序定义在 `src/loader-domain/` 的纯契约中。构建脚本负责把默认源 Icons8 Flat Color Icons 和 Noto Emoji SVG 转成 `64 * 64` 彩色资源，运行时把资源转换为 `24 * 24` 展示点阵。配置生成器负责生成完整资源池和稳定随机切换效果，PixiJS 渲染器只负责加载和展示。
 
-Thinking Icon Queue 的关键词提取是纯逻辑，服务端只把清洗后的 `thought_keyword` 事件发给浏览器，不把 thought 原文或 `thoughtSignature` 发到前端。关键词到 icon 的匹配发生在浏览器边界，复用 `icon_loader` 的 `icon_resource` 资产池；reducer 维护已匹配好的最近 10 个逻辑队列项和请求生命周期计数，最近 10 个内同一 icon 不重复，同一请求生命周期内同一 icon 最多成功出现 2 次；渲染器只展示最新 5 个单行槽位，并避免退场动画和新入场 icon 短暂重复。
+Thinking Icon Queue 的关键词提取是纯逻辑，服务端只把清洗后的 `thought_keyword` 事件发给浏览器，不把 thought 原文或 `thoughtSignature` 发到前端。关键词到 icon 的匹配发生在浏览器边界，复用 `icon_loader` 的 `icon_resource` 资产池；reducer 维护已匹配好的最近 10 个逻辑队列项和现有请求生命周期去重状态；渲染器只展示最新 5 个单行槽位，并按右侧 append、左侧挤出的方式做连续动画，避免队列外第 6 个 icon 和重复退场项短暂露出。
 
 ## 素材策略
 

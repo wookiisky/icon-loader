@@ -26,32 +26,26 @@ export type KeywordIconQueueItem = {
 export type KeywordIconQueueState = {
   /** 最近可展示的 icon 队列项。 */
   items: KeywordIconQueueItem[];
-  /** 本次请求生命周期内每个 icon 成功进入队列的次数。 */
-  assetAppearanceCounts: ReadonlyMap<string, number>;
+  /** 本次请求生命周期内已成功进入队列的 icon 资产 ID。 */
+  appearedAssetIds: ReadonlySet<string>;
 };
 
 const maxKeywordIconQueueLength = 10;
-const maxKeywordIconAppearancesPerRequest = 2;
 
 /** 创建空关键词 icon 队列状态。 */
 export function createEmptyKeywordIconQueueState(): KeywordIconQueueState {
   return {
     items: [],
-    assetAppearanceCounts: new Map<string, number>(),
+    appearedAssetIds: new Set<string>(),
   };
 }
 
-/** 将新 icon 追加到队列尾部，并执行最近窗口和请求生命周期去重。 */
+/** 将新 icon 追加到队列尾部，并执行请求生命周期去重。 */
 export function appendKeywordIconQueueItem(
   state: KeywordIconQueueState,
   item: KeywordIconQueueItem,
 ): KeywordIconQueueState {
-  if (state.items.some((queueItem) => queueItem.assetId === item.assetId)) {
-    return state;
-  }
-
-  const currentAppearanceCount = state.assetAppearanceCounts.get(item.assetId) ?? 0;
-  if (currentAppearanceCount >= maxKeywordIconAppearancesPerRequest) {
+  if (state.appearedAssetIds.has(item.assetId)) {
     return state;
   }
 
@@ -60,11 +54,11 @@ export function appendKeywordIconQueueItem(
     return state;
   }
 
-  const nextCounts = new Map(state.assetAppearanceCounts);
-  nextCounts.set(item.assetId, currentAppearanceCount + 1);
+  const nextAppearedAssetIds = new Set(state.appearedAssetIds);
+  nextAppearedAssetIds.add(item.assetId);
 
   return {
     items: [...state.items, item].slice(-maxKeywordIconQueueLength),
-    assetAppearanceCounts: nextCounts,
+    appearedAssetIds: nextAppearedAssetIds,
   };
 }
