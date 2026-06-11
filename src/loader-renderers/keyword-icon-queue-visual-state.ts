@@ -1,6 +1,7 @@
 import type { KeywordIconQueueItem } from "../loader-domain/keyword-icon-queue";
 
-const transitionMs = 520;
+/** Thinking Icon Queue 单次槽位移动动画时长。 */
+export const keywordIconQueueTransitionMs = 360;
 const queueGridColumns = 16;
 const queueGridRows = 16;
 const slotsPerRow = 5;
@@ -191,6 +192,6 @@ export function resolveCurrentSlot(visualItem: QueueVisualItem, nowMs: number): 
 
 /** 计算当前槽位变化的 0 到 1 进度。 */
 export function resolveTransitionProgress(visualItem: QueueVisualItem, nowMs: number): number {
-  const progress = (nowMs - visualItem.changedAtMs) / transitionMs;
+  const progress = (nowMs - visualItem.changedAtMs) / keywordIconQueueTransitionMs;
   return Math.min(1, Math.max(0, progress));
 }

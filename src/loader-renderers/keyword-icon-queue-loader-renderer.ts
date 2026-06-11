@@ -10,6 +10,7 @@ import type { KeywordIconQueueItem } from "../loader-domain/keyword-icon-queue";
 import {
   createNextQueueVisualItems,
   keywordIconQueueSlotCount,
+  keywordIconQueueTransitionMs,
   isQueuePixelInsideVisibleBounds,
   resolveQueueLayout,
   resolveQueueVisibleBounds,
@@ -26,8 +27,6 @@ const queueGrid = {
   columns: 16,
   rows: 16,
 } as const;
-
-const transitionMs = 520;
 
 type QueueIconResourceLoadState =
   | { kind: "loading" }
@@ -116,7 +115,7 @@ export function createKeywordIconQueueLoaderRenderer(app: Application): LoaderRe
     });
 
     visualItems = visualItems.filter((visualItem) => {
-      return !visualItem.removing || elapsedMs - visualItem.changedAtMs < transitionMs;
+      return !visualItem.removing || elapsedMs - visualItem.changedAtMs < keywordIconQueueTransitionMs;
     });
 
     title.x = 14;

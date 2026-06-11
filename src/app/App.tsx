@@ -10,8 +10,18 @@ import { LoaderShowcase } from "../components/LoaderShowcase";
 import { PromptForm } from "../components/PromptForm";
 import { ReplyStreamPanel } from "../components/ReplyStreamPanel";
 import { streamReplyFromProxy } from "../gemini-client/stream-reply-client";
+import type { KeywordIconQueueItem } from "../loader-domain/keyword-icon-queue";
 
 type AssetRegistryLoadState = "loading" | "ready" | "failed";
+
+type PendingKeywordIconItem = {
+  /** 所属请求 ID，用于防止旧请求 timer 串入新请求。 */
+  requestId: string;
+  /** 已完成资产匹配、等待进入 UI 队列的 icon。 */
+  item: KeywordIconQueueItem;
+};
+
+const keywordIconAppendIntervalMs = 360;
 
 /** 生成请求 ID，避免不同流式请求互相覆盖状态。 */
 function createRequestId(): string {
@@ -34,8 +44,16 @@ export function App() {
   const assetRegistryRef = useRef<AssetRegistry>(assetRegistry);
   const assetRegistryLoadStateRef = useRef<AssetRegistryLoadState>(assetRegistryLoadState);
   const pendingKeywordEventsRef = useRef<{ requestId: string; keyword: string; receivedAtMs: number }[]>([]);
+  const pendingKeywordIconItemsRef = useRef<PendingKeywordIconItem[]>([]);
+  const keywordIconAppendTimerRef = useRef<number | null>(null);
+  const lastKeywordIconAppendAtRef = useRef<number | null>(null);
+  const currentLoadingRequestIdRef = useRef<string | null>(null);
   const isLoading = state.kind === "loading";
   const loaderPlaying = shouldPlayLoaderAnimation(state, manualLoaderPlaying);
+
+  useEffect(() => {
+    currentLoadingRequestIdRef.current = state.kind === "loading" ? state.requestId : null;
+  }, [state]);
 
   useEffect(() => {
     assetRegistryRef.current = assetRegistry;
@@ -68,6 +86,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      clearKeywordIconAppendTimer();
+    };
+  }, []);
+
+  useEffect(() => {
     if (assetRegistryLoadState !== "ready" || state.kind !== "loading") {
       return;
     }
@@ -91,6 +115,10 @@ export function App() {
 
     const requestId = createRequestId();
     const seed = createLoaderSeed();
+    const trimmedPrompt = prompt.trim();
+    clearPendingKeywordEvents();
+    clearPendingKeywordIconItems();
+    currentLoadingRequestIdRef.current = trimmedPrompt.length > 0 ? requestId : null;
     dispatch({
       kind: "submit",
       requestId,
@@ -99,23 +127,27 @@ export function App() {
       prompt,
     });
 
-    if (prompt.trim().length === 0) {
+    if (trimmedPrompt.length === 0) {
       return;
     }
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    for await (const event of streamReplyFromProxy(prompt.trim(), abortController.signal)) {
+    for await (const event of streamReplyFromProxy(trimmedPrompt, abortController.signal)) {
       if (event.kind === "chunk") {
         dispatch({ kind: "stream_chunk", requestId, text: event.text });
       } else if (event.kind === "thought_keyword") {
         handleThoughtKeywordEvent(requestId, event.keyword);
       } else if (event.kind === "done") {
         clearPendingKeywordEvents(requestId);
+        clearPendingKeywordIconItems();
+        currentLoadingRequestIdRef.current = null;
         dispatch({ kind: "stream_done", requestId, nowMs: Date.now() });
       } else {
         clearPendingKeywordEvents(requestId);
+        clearPendingKeywordIconItems();
+        currentLoadingRequestIdRef.current = null;
         dispatch({
           kind: "fail",
           requestId,
@@ -124,6 +156,23 @@ export function App() {
         });
       }
     }
+  }
+
+  /** 清理逐项 append 的 timer，避免卸载或终态后继续触发。 */
+  function clearKeywordIconAppendTimer(): void {
+    if (keywordIconAppendTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(keywordIconAppendTimerRef.current);
+    keywordIconAppendTimerRef.current = null;
+  }
+
+  /** 清理已匹配但尚未展示的 icon 队列。 */
+  function clearPendingKeywordIconItems(): void {
+    clearKeywordIconAppendTimer();
+    pendingKeywordIconItemsRef.current = [];
+    lastKeywordIconAppendAtRef.current = null;
   }
 
   /** 根据资产加载状态处理 thought keyword，加载中则先缓存。 */
@@ -140,20 +189,28 @@ export function App() {
     dispatchKeywordIconMatch(requestId, keyword, receivedAtMs);
   }
 
-  /** 清理指定请求尚未匹配的关键词，避免终态请求残留缓存。 */
-  function clearPendingKeywordEvents(requestId: string): void {
+  /** 清理尚未匹配的关键词，避免终态请求或新请求残留缓存。 */
+  function clearPendingKeywordEvents(requestId?: string): void {
+    if (requestId === undefined) {
+      pendingKeywordEventsRef.current = [];
+      return;
+    }
+
     pendingKeywordEventsRef.current = pendingKeywordEventsRef.current.filter((event) => event.requestId !== requestId);
   }
 
   /** 在浏览器边界完成关键词到 icon 资产的匹配，再把纯队列项交给 reducer。 */
   function dispatchKeywordIconMatch(requestId: string, keyword: string, appendedAtMs: number): void {
+    if (currentLoadingRequestIdRef.current !== requestId) {
+      return;
+    }
+
     const match = matchKeywordToIconAsset(keyword, assetRegistryRef.current);
     if (match === null) {
       return;
     }
 
-    dispatch({
-      kind: "thought_keyword_icon",
+    enqueueKeywordIconItem({
       requestId,
       item: {
         id: `${requestId}-${appendedAtMs}-${match.keyword}-${match.asset.id}`,
@@ -168,6 +225,55 @@ export function App() {
         appendedAtMs,
       },
     });
+  }
+
+  /** 将已匹配 icon 放入播放队列，由调度器保证每次只 append 1 个。 */
+  function enqueueKeywordIconItem(item: PendingKeywordIconItem): void {
+    pendingKeywordIconItemsRef.current = [...pendingKeywordIconItemsRef.current, item];
+    scheduleNextKeywordIconAppend();
+  }
+
+  /** 按固定间隔调度下一次 icon append，首个 icon 会立即进入队列。 */
+  function scheduleNextKeywordIconAppend(): void {
+    if (keywordIconAppendTimerRef.current !== null || pendingKeywordIconItemsRef.current.length === 0) {
+      return;
+    }
+
+    const nowMs = Date.now();
+    const lastAppendAtMs = lastKeywordIconAppendAtRef.current;
+    const delayMs =
+      lastAppendAtMs === null ? 0 : Math.max(0, keywordIconAppendIntervalMs - (nowMs - lastAppendAtMs));
+
+    if (delayMs === 0) {
+      appendNextKeywordIconItem();
+      return;
+    }
+
+    keywordIconAppendTimerRef.current = window.setTimeout(() => {
+      keywordIconAppendTimerRef.current = null;
+      appendNextKeywordIconItem();
+    }, delayMs);
+  }
+
+  /** 从待播放队列取出 1 个当前请求的 icon 并 dispatch。 */
+  function appendNextKeywordIconItem(): void {
+    while (pendingKeywordIconItemsRef.current.length > 0) {
+      const [nextItem, ...remainingItems] = pendingKeywordIconItemsRef.current;
+      pendingKeywordIconItemsRef.current = remainingItems;
+      if (currentLoadingRequestIdRef.current !== nextItem.requestId) {
+        continue;
+      }
+
+      lastKeywordIconAppendAtRef.current = Date.now();
+      dispatch({
+        kind: "thought_keyword_icon",
+        requestId: nextItem.requestId,
+        item: nextItem.item,
+      });
+      break;
+    }
+
+    scheduleNextKeywordIconAppend();
   }
 
   return (

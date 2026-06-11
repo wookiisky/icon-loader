@@ -97,7 +97,7 @@ pnpm build:icon-resources
 2. 输入非空问题，确认普通回车会提交，`Shift + Enter` 会换行；中文输入法选词确认时按回车不会误提交。
 3. 确认回复逐步显示。
 4. 确认 3 个 Icon Loader 在请求中同时播放，且初始动画不同。
-5. 确认 Thinking Icon Queue 在请求中显示：若模型返回可见 thought summary，应有 16x16 像素 icon append，逻辑队列最多保留最近 10 个，界面单行展示最新 5 个；未满 5 项时新 icon 从右侧 append，已有项整体左挤；满 5 项后追加时不保留被挤出项退场，队列外不短暂露出第 6 个 icon；同一请求生命周期内同一 icon 最多成功出现 1 次，被挤出最近 10 个窗口后也不回流；重复匹配不会 append，退场动画也不应和新入场 icon 短暂重复；若资产清单稍后才加载完成，早到的关键词应在清单 ready 后显示；若模型没有返回可见 thought summary，队列保持等待态且回复正常继续。
+5. 确认 Thinking Icon Queue 在请求中显示：若模型返回可见 thought summary，应有 16x16 像素 icon 按固定节奏逐个 append，连续 thought keyword 或资产清单 ready 后的缓存回放不应一次出现多个新 icon；逻辑队列最多保留最近 10 个，界面单行展示最新 5 个；未满 5 项时新 icon 从右侧 append，已有项整体左挤；满 5 项后追加时不保留被挤出项退场，队列外不短暂露出第 6 个 icon；同一请求生命周期内同一 icon 最多成功出现 1 次，被挤出最近 10 个窗口后也不回流；重复匹配不会 append，退场动画也不应和新入场 icon 短暂重复；若资产清单稍后才加载完成，早到的关键词应在清单 ready 后按同一节奏显示；若模型没有返回可见 thought summary，队列保持等待态且回复正常继续。
 6. 确认请求完成后 Thinking Icon Queue 回到等待态，3 个随机 Loader 按播放规则停止或继续。
 7. 点击顶部 `开始`，确认无请求时 3 个随机 Loader 也会播放。
 8. 点击顶部 `停止`，确认无请求时 3 个随机 Loader 回到等待态。
